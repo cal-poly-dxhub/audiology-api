@@ -8,6 +8,9 @@ from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_s3_notifications as s3n
 from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_apigateway as apigateway
+
+POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSLambdaPowertoolsPythonV3-python39-x86_64:18"
 
 
 class AudiologyApiStack(Stack):
@@ -30,7 +33,17 @@ class AudiologyApiStack(Stack):
             "AudiologyBucketResponses",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="handler.handler",
-            code=_lambda.Code.from_asset("lambda/bucket_response"),
+            code=_lambda.Code.from_asset(
+                "lambda/bucket_response",
+                bundling={
+                    "image": _lambda.Runtime.PYTHON_3_13.bundling_image,
+                    "command": [
+                        "bash",
+                        "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output",
+                    ],
+                },
+            ),
             timeout=Duration.seconds(15),
             memory_size=512,
             environment={"BUCKET_NAME": self.bucket.bucket_name},
