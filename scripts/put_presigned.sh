@@ -7,6 +7,6 @@ echo "Uploading to $URL"
 
 curl -X PUT \
   -T "$1"  \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: text/csv" \
   $URL
 

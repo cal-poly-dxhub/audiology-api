@@ -61,11 +61,11 @@ class AudiologyApiStack(Stack):
 
         self.bucket.grant_read(bucket_response)
 
-        # Triggers for files of the form "lab_data_input/*.json"
+        # Triggers for files of the form "input_reports/*.csv"
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED_PUT,
             s3n.LambdaDestination(bucket_response),
-            s3.NotificationKeyFilter(prefix="lab_data_input/", suffix=".json"),
+            s3.NotificationKeyFilter(prefix="input_reports/", suffix=".csv"),
         )
 
         self.powertools_layer = _lambda.LayerVersion.from_layer_version_arn(

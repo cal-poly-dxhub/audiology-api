@@ -21,22 +21,20 @@ def upload_handler():
     logger.info("Received file upload event")
 
     event = resolver.current_event
-    body = event.body
+    json_body = event.json_body
+    job_name = json_body.get("job_name", None)
 
-    if body is None:
-        logger.error("No body found in the event")
+    if job_name is None:
+        logger.error("Filename is missing in the request")
         return {
             "statusCode": 400,
-            "body": "Bad Request: No binary body found in the event.",
+            "body": "Bad Request: Filename is required.",
             "headers": {"Content-Type": "application/json"},
         }
 
-    logger.debug(f"Received body: {body}")
-    logger.debug(f"Type of body: {type(body)}")
-
-    # Generate a unique key for the file
+    logger.debug(f"Job name: {job_name}")
     stamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    file_key = f"lab_data_input/test_file_{stamp}.json"
+    file_key = f"input_reports/{stamp}/{job_name}.csv"
 
     # Generate a pre-signed URL for uploading the file
     try:
@@ -45,7 +43,7 @@ def upload_handler():
             Params={
                 "Bucket": "audiologyapistack-audiologybucket1df9aa41-6pad9bmyikok",
                 "Key": file_key,
-                "ContentType": "application/json",
+                "ContentType": "text/csv",
             },
             ExpiresIn=3600,  # URL expires in 1 hour
         )
