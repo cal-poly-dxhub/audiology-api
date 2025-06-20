@@ -23,10 +23,15 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aws-cdk-lib" },
+    { name = "aws-lambda-powertools" },
     { name = "constructs" },
 ]
 
 [package.dev-dependencies]
+api = [
+    { name = "aws-lambda-powertools" },
+    { name = "boto3" },
+]
 dev = [
     { name = "boto3" },
     { name = "botocore" },
@@ -36,10 +41,15 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aws-cdk-lib", specifier = "==2.200.1" },
+    { name = "aws-lambda-powertools", specifier = ">=3.15.1" },
     { name = "constructs", specifier = ">=10.0.0,<11.0.0" },
 ]
 
 [package.metadata.requires-dev]
+api = [
+    { name = "aws-lambda-powertools", specifier = ">=3.15.1" },
+    { name = "boto3", specifier = ">=1.38.40" },
+]
 dev = [
     { name = "boto3", specifier = ">=1.38.40" },
     { name = "botocore", specifier = ">=1.38.40" },
@@ -104,6 +114,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/fd/ba/74e3987d9683ba8e95a40fbf3039e541e010d1351bce55ae78db5b685512/aws_cdk_lib-2.200.1.tar.gz", hash = "sha256:3f64251327d2f64b2bc86e8e3fc5ab2c7381f135ad781c447f7dc64298397d33", size = 40831032, upload-time = "2025-06-03T15:50:45.807Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/85/e9/d613ca972474248b939f36027d47dfd6265328d807eeca4d3cd0cbf3514b/aws_cdk_lib-2.200.1-py3-none-any.whl", hash = "sha256:ac7f4f5b80b9183615698925746a2ae937498bfb5ae899746f19c76ed1688e62", size = 41114583, upload-time = "2025-06-03T15:50:12.657Z" },
+]
+
+[[package]]
+name = "aws-lambda-powertools"
+version = "3.15.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jmespath" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/89/697575d2d2379863f62c28ca96d8291fd19120a4a69db3c55405ed1235c5/aws_lambda_powertools-3.15.1.tar.gz", hash = "sha256:31c19887e012287da539f8c319da04e3f50c5f37d7b7ea1f0cd1c011f7ff05a8", size = 683181, upload-time = "2025-06-20T17:01:51.146Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/9e/c4ea28734a614a7632dc5ddbfd949a61027bbfb737c4b1b39b20caa42f43/aws_lambda_powertools-3.15.1-py3-none-any.whl", hash = "sha256:673ccfb27087d2940e798b2618e9cb992981ccb1d0310bc17c4d1c69ebcbec11", size = 824101, upload-time = "2025-06-20T17:01:48.695Z" },
 ]
 
 [[package]]

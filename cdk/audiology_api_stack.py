@@ -54,3 +54,50 @@ class AudiologyApiStack(Stack):
             s3n.LambdaDestination(bucket_response),
             s3.NotificationKeyFilter(prefix="lab_data_input/", suffix=".json"),
         )
+
+        self.powertools_layer = _lambda.LayerVersion.from_layer_version_arn(
+            self,
+            "PowertoolsLayer",
+            layer_version_arn=POWERTOOLS_LAYER_VERSION_ARN,
+        )
+
+        self.api_handler = _lambda.Function(
+            self,
+            "AudiologyApiHandler",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="handler.handler",
+            code=_lambda.Code.from_asset(
+                "lambda/api",
+                bundling={
+                    "image": _lambda.Runtime.PYTHON_3_13.bundling_image,
+                    "command": [
+                        "bash",
+                        "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output",
+                    ],
+                },
+            ),
+            timeout=Duration.seconds(15),
+            memory_size=512,
+            environment={
+                "BUCKET_NAME": self.bucket.bucket_name,
+                "TABLE_NAME": self.audiology_table.table_name,
+            },
+            layers=[self.powertools_layer],
+        )
+
+        self.bucket.grant_put(self.api_handler)
+
+        self.api = apigateway.RestApi(
+            self,
+            "AudiologyApi",
+            rest_api_name="Audiology API",
+            description="File upload and job update API for the Audiology project.",
+        )
+
+        upload_resource = self.api.root.add_resource("upload")
+        upload_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.api_handler),
+            # TODO: possibly define responses with method_responses
+        )
