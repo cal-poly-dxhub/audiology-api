@@ -2,10 +2,8 @@ from aws_lambda_powertools.event_handler.api_gateway import ApiGatewayResolver
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.utilities.data_classes import APIGatewayProxyEvent
-import base64
 import boto3
 from datetime import datetime
-import io
 
 
 resolver = ApiGatewayResolver()
