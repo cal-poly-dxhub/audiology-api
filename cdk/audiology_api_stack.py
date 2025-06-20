@@ -7,6 +7,7 @@ from constructs import Construct
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_s3_notifications as s3n
+from aws_cdk import aws_dynamodb as dynamodb
 
 class AudiologyApiStack(Stack):
 
@@ -30,6 +31,15 @@ class AudiologyApiStack(Stack):
             environment={
                 "BUCKET_NAME": self.bucket.bucket_name
             }
+        )
+
+        self.audiology_table = dynamodb.Table(self, "AudiologyTable",
+            partition_key=dynamodb.Attribute(
+                name="id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         self.bucket.grant_read(bucket_response)
