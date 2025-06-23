@@ -28,6 +28,16 @@ class AudiologyApiStack(Stack):
             public_read_access=False,
         )
 
+        self.audiology_table = dynamodb.Table(
+            self,
+            "AudiologyJobTable",
+            partition_key=dynamodb.Attribute(
+                name="job_name", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         bucket_response = _lambda.Function(
             self,
             "AudiologyBucketResponses",
@@ -46,17 +56,10 @@ class AudiologyApiStack(Stack):
             ),
             timeout=Duration.seconds(15),
             memory_size=512,
-            environment={"BUCKET_NAME": self.bucket.bucket_name},
-        )
-
-        self.audiology_table = dynamodb.Table(
-            self,
-            "AudiologyTable",
-            partition_key=dynamodb.Attribute(
-                name="id", type=dynamodb.AttributeType.STRING
-            ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY,
+            environment={
+                "BUCKET_NAME": self.bucket.bucket_name,
+                "JOB_TABLE": self.audiology_table.table_name,
+            },
         )
 
         self.bucket.grant_read(bucket_response)
