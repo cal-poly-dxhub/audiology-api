@@ -3,6 +3,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from aws_lambda_powertools import Logger, Tracer
 import boto3
 from datetime import datetime
+import os
 
 
 resolver = ApiGatewayResolver()
@@ -19,6 +20,8 @@ def upload_handler():
     Handles file upload events by generating a pre-signed URL.
     """
     logger.info("Received file upload event")
+
+    bucket_name = os.environ.get("BUCKET_NAME", None)
 
     event = resolver.current_event
     json_body = event.json_body
@@ -41,7 +44,7 @@ def upload_handler():
         presigned_url = s3.generate_presigned_url(
             "put_object",
             Params={
-                "Bucket": "audiologyapistack-audiologybucket1df9aa41-6pad9bmyikok",
+                "Bucket": bucket_name,
                 "Key": file_key,
                 "ContentType": "text/csv",
             },
