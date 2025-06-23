@@ -61,6 +61,8 @@ class AudiologyApiStack(Stack):
 
         self.bucket.grant_read(bucket_response)
 
+        self.audiology_table.grant_read_write_data(bucket_response)
+
         # Triggers for files of the form "input_reports/*.csv"
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED_PUT,
