@@ -116,10 +116,3 @@ class WebSocketApiStack(Stack):
             value=access_log_group.log_group_name,
             description="WebSocket API Access Logs CloudWatch Log Group",
         )
-
-        # CfnOutput(
-        #     self,
-        #     "WebSocketExecutionLogGroup",
-        #     value=execution_log_group.log_group_name,
-        #     description="WebSocket API Execution Logs CloudWatch Log Group",
-        # )
