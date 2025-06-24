@@ -49,6 +49,8 @@ class WebSocketApi(Construct):
             },
         )
 
+        job_table.grant_read_write_data(websocket_handler)
+
         # Create WebSocket API
         websocket_api = apigwv2.WebSocketApi(
             self,
