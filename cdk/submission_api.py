@@ -15,7 +15,13 @@ POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSL
 
 
 class SubmissionApi(Construct):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        job_table: dynamodb.Table,
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self.bucket = s3.Bucket(
@@ -27,18 +33,6 @@ class SubmissionApi(Construct):
             encryption=s3.BucketEncryption.S3_MANAGED,
             public_read_access=False,
         )
-
-        self.audiology_table = dynamodb.Table(
-            self,
-            "AudiologyJobTable",
-            partition_key=dynamodb.Attribute(
-                name="job_name", type=dynamodb.AttributeType.STRING
-            ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY,
-        )
-
-        self.job_table_name = self.audiology_table.table_name
 
         bucket_response = _lambda.Function(
             self,
@@ -60,13 +54,13 @@ class SubmissionApi(Construct):
             memory_size=512,
             environment={
                 "BUCKET_NAME": self.bucket.bucket_name,
-                "JOB_TABLE": self.audiology_table.table_name,
+                "JOB_TABLE": job_table.table_name,
             },
         )
 
         self.bucket.grant_read(bucket_response)
 
-        self.audiology_table.grant_read_write_data(bucket_response)
+        job_table.grant_read_write_data(bucket_response)
 
         # Triggers for files of the form "input_reports/*.csv"
         self.bucket.add_event_notification(
@@ -101,7 +95,7 @@ class SubmissionApi(Construct):
             memory_size=512,
             environment={
                 "BUCKET_NAME": self.bucket.bucket_name,
-                "TABLE_NAME": self.audiology_table.table_name,
+                "TABLE_NAME": job_table.table_name,
             },
             layers=[self.powertools_layer],
         )
