@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_apigatewayv2 as apigwv2,
     aws_apigatewayv2_integrations as integrations,
+    aws_dynamodb as dynamodb,
     aws_logs as logs,
     aws_iam as iam,
 )
@@ -14,7 +15,11 @@ from constructs import Construct
 
 class WebSocketApi(Construct):
     def __init__(
-        self, scope: Construct, construct_id: str, job_table_name: str, **kwargs
+        self,
+        scope: Construct,
+        construct_id: str,
+        job_table: dynamodb.Table,
+        **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
@@ -40,7 +45,7 @@ class WebSocketApi(Construct):
             timeout=Duration.seconds(15),
             memory_size=512,
             environment={
-                "JOB_TABLE": job_table_name,
+                "JOB_TABLE": job_table.table_name,
             },
         )
 

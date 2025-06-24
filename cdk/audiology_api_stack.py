@@ -19,5 +19,5 @@ class AudiologyApiStack(Stack):
         self.web_socket_api = WebSocketApi(
             self,
             "WebSocketApi",
-            job_table_name=self.submission_api.job_table_name,
+            job_table=self.submission_api.audiology_table,
         )
