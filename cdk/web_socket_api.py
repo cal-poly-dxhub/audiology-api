@@ -12,9 +12,14 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class WebSocketApiStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+class WebSocketApi(Construct):
+    def __init__(
+        self, scope: Construct, construct_id: str, job_table_name: str, **kwargs
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        self.region = Stack.of(self).region
+        self.account = Stack.of(self).account
 
         # Create log groups first
         access_log_group = logs.LogGroup(
@@ -34,6 +39,9 @@ class WebSocketApiStack(Stack):
             code=_lambda.Code.from_asset("lambda/websocket"),
             timeout=Duration.seconds(15),
             memory_size=512,
+            environment={
+                "JOB_TABLE": job_table_name,
+            },
         )
 
         # Create WebSocket API

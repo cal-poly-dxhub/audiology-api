@@ -14,7 +14,7 @@ from aws_cdk import aws_apigateway as apigateway
 POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSLambdaPowertoolsPythonV3-python39-x86_64:18"
 
 
-class ApiStack(Stack):
+class SubmissionApi(Construct):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
@@ -37,6 +37,8 @@ class ApiStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
+
+        self.job_table_name = self.audiology_table.table_name
 
         bucket_response = _lambda.Function(
             self,
