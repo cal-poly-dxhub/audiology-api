@@ -101,6 +101,7 @@ class SubmissionApi(Construct):
             environment={
                 "BUCKET_NAME": self.bucket.bucket_name,
                 "TABLE_NAME": job_table.table_name,
+                "JOB_TABLE": job_table.table_name,
                 "CONFIG_TABLE_NAME": config_table.table_name,
             },
             layers=[self.powertools_layer],
@@ -108,6 +109,7 @@ class SubmissionApi(Construct):
 
         config_table.grant_read_write_data(self.api_handler)
         self.bucket.grant_put(self.api_handler)
+        job_table.grant_read_write_data(self.api_handler)
 
         self.api = apigateway.RestApi(
             self,

@@ -16,6 +16,55 @@ logger = Logger(service="audiology-api-lambda")
 s3 = boto3.client("s3")
 dynamodb = boto3.client("dynamodb")
 
+JOB_TABLE = os.environ.get("JOB_TABLE", None)
+
+
+def job_exists(job_name: str) -> bool:
+    """
+    Checks if a job with the given name already exists in DynamoDB.
+    """
+
+    if JOB_TABLE is None:
+        raise ValueError("JOB_TABLE environment variable is not set.")
+
+    try:
+        response = dynamodb.get_item(
+            TableName=JOB_TABLE,
+            Key={"job_name": {"S": job_name}},
+        )
+        return "Item" in response
+    except Exception as e:
+        raise ValueError(f"Error checking job existence: {str(e)}") from e
+
+
+def create_dynamo_job(
+    job_name: str,
+    config_id: str,
+) -> None:
+
+    job_table = os.environ.get("JOB_TABLE", None)
+    if job_table is None:
+        raise ValueError("JOB_TABLE environment variable is not set.")
+
+    if job_exists(job_name):
+        raise ValueError(f"Job with name {job_name} already exists.")
+
+    try:
+        dynamodb.put_item(
+            TableName=job_table,
+            Item={
+                "job_name": {"S": job_name},
+                "config_id": {"S": config_id},
+                "status": {"S": "created"},
+            },
+        )
+    except ClientError as e:
+        logger.error(f"Error creating job in DynamoDB: {e}")
+        raise ValueError(f"Error creating job in DynamoDB: {str(e)}") from e
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise ValueError(f"Unexpected error: {str(e)}") from e
+
 
 @resolver.post("/upload")
 @tracer.capture_method
@@ -26,6 +75,14 @@ def upload_handler():
     logger.info("Received file upload event")
 
     bucket_name = os.environ.get("BUCKET_NAME", None)
+
+    if bucket_name is None:
+        logger.error("BUCKET_NAME environment variable is not set")
+        return {
+            "statusCode": 500,
+            "body": "Internal Server Error: BUCKET_NAME not configured.",
+            "headers": {"Content-Type": "application/json"},
+        }
 
     event = resolver.current_event
     json_body = event.json_body
@@ -64,6 +121,19 @@ def upload_handler():
         }
 
     logger.info(f"Generated pre-signed URL: {presigned_url}")
+
+    try:
+        create_dynamo_job(
+            job_name=job_name,
+            config_id=config_id,
+        )
+    except ValueError as e:
+        logger.error(f"Error creating job in DynamoDB: {e}")
+        return {
+            "statusCode": 500,
+            "body": f"Internal Server Error: {str(e)}",
+            "headers": {"Content-Type": "application/json"},
+        }
 
     return {
         "statusCode": 200,

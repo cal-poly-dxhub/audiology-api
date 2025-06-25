@@ -4,6 +4,8 @@ import os
 import boto3
 import uuid
 
+from botocore.utils import ClientError
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -35,7 +37,7 @@ def job_exists(job_name: str) -> bool:
 
 def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
     """
-    Creates a job record in DynamoDB with the provided job name.
+    Updates the DynamoDB job record with the input s3 path and status.
     """
 
     if JOB_TABLE is None:
@@ -43,16 +45,34 @@ def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
 
     s3_path = f"s3://{bucket_name}/{input_key}"
 
-    if job_exists(job_name):
-        raise ValueError(f"Job with name {job_name} already exists.")
+    try:
+        if not job_exists(job_name):
+            raise ValueError(f"Job with name {job_name} already exists.")
 
-    job_record = {
-        "job_name": {"S": job_name},
-        "input_s3_path": {"S": s3_path},
-        "status": {"S": "created"},
-    }
+        dynamodb.update_item(
+            TableName=JOB_TABLE,
+            Key={"job_name": {"S": job_name}},
+            UpdateExpression="SET input_s3_path = :s3_path, #status = :status",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":s3_path": {"S": s3_path},
+                ":status": {"S": "created"},
+            },
+        )
 
-    dynamodb.put_item(TableName=JOB_TABLE, Item=job_record)
+        logger.info(f"Successfully recorded job {job_name} with S3 path {s3_path}")
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"]["Message"]
+        logger.error(f"DynamoDB ClientError: {error_code} - {error_message}")
+        raise Exception(f"Failed to record job in DynamoDB: {error_message}")
+    except ValueError as e:
+        logger.error(f"Validation error: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error recording job {job_name}: {e}")
+        raise Exception(f"Failed to record job {job_name}: {str(e)}")
 
 
 def trigger_record_processing(job_name: str):

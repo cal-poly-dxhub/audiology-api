@@ -7,5 +7,5 @@ REGION="us-west-2"
 
 curl -X POST "https://$API_ID.execute-api.$REGION.amazonaws.com/prod/upload" \
   -H "Content-Type: application/json" \
-  -d '{"job_name": "report_sample"}' > upload_out.json
+  -d '{"job_name": "report_sample", "config_id": "TestConfig"}' > upload_out.json
 
