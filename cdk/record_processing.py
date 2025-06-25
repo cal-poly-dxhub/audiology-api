@@ -45,6 +45,7 @@ class RecordProcessing(Construct):
             memory_size=512,
             environment={
                 "JOB_TABLE": job_table.table_name,
+                "CONFIG_TABLE": config_table.table_name,
             },
         )
 
