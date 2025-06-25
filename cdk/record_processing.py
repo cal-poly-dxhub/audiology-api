@@ -17,6 +17,7 @@ class RecordProcessing(Construct):
         construct_id: str,
         job_table: dynamodb.Table,
         websocket_api_id: str,
+        config_table: dynamodb.Table,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -46,6 +47,8 @@ class RecordProcessing(Construct):
                 "JOB_TABLE": job_table.table_name,
             },
         )
+
+        config_table.grant_read_data(record_processor_lambda)
 
         completion_recorder_lambda = _lambda.Function(
             self,

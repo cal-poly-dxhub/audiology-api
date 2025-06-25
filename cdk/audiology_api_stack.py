@@ -21,6 +21,16 @@ class AudiologyApiStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
+        self.config_table = dynamodb.Table(
+            self,
+            "AudiologyConfigTable",
+            partition_key=dynamodb.Attribute(
+                name="config_id", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         self.web_socket_api = WebSocketApi(
             self,
             "WebSocketApi",
@@ -32,6 +42,7 @@ class AudiologyApiStack(Stack):
             "RecordProcessing",
             job_table=self.audiology_table,
             websocket_api_id=self.web_socket_api.websocket_api_id,
+            config_table=self.config_table,
         )
 
         self.submission_api = SubmissionApi(
@@ -39,4 +50,5 @@ class AudiologyApiStack(Stack):
             "SubmissionApi",
             job_table=self.audiology_table,
             step_function=self.record_processing.step_function,
+            config_table=self.config_table,
         )

@@ -22,6 +22,7 @@ class SubmissionApi(Construct):
         construct_id: str,
         job_table: dynamodb.Table,
         step_function: stepfunctions.StateMachine,
+        config_table: dynamodb.Table,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -100,10 +101,12 @@ class SubmissionApi(Construct):
             environment={
                 "BUCKET_NAME": self.bucket.bucket_name,
                 "TABLE_NAME": job_table.table_name,
+                "CONFIG_TABLE_NAME": config_table.table_name,
             },
             layers=[self.powertools_layer],
         )
 
+        config_table.grant_read_write_data(self.api_handler)
         self.bucket.grant_put(self.api_handler)
 
         self.api = apigateway.RestApi(
@@ -118,4 +121,10 @@ class SubmissionApi(Construct):
             "POST",
             apigateway.LambdaIntegration(self.api_handler),
             # TODO: possibly define responses with method_responses
+        )
+
+        upload_config_resource = self.api.root.add_resource("upload_config")
+        upload_config_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.api_handler),
         )
