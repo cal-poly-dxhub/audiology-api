@@ -60,6 +60,8 @@ class WebSocketApi(Construct):
             route_selection_expression="$request.body.action",
         )
 
+        self.websocket_api_id = websocket_api.api_id
+
         # Create separate Lambda integrations for each route
         connect_integration = integrations.WebSocketLambdaIntegration(
             "ConnectIntegration", websocket_handler

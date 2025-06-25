@@ -1,5 +1,6 @@
 from aws_cdk import RemovalPolicy, Stack
 from constructs import Construct
+from cdk.record_processing import RecordProcessing
 from cdk.submission_api import SubmissionApi
 from cdk.web_socket_api import WebSocketApi
 from aws_cdk import aws_dynamodb as dynamodb
@@ -19,14 +20,23 @@ class AudiologyApiStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
-        self.submission_api = SubmissionApi(
-            self,
-            "SubmissionApi",
-            job_table=self.audiology_table,
-        )
 
         self.web_socket_api = WebSocketApi(
             self,
             "WebSocketApi",
             job_table=self.audiology_table,
+        )
+
+        self.record_processing = RecordProcessing(
+            self,
+            "RecordProcessing",
+            job_table=self.audiology_table,
+            websocket_api_id=self.web_socket_api.websocket_api_id,
+        )
+
+        self.submission_api = SubmissionApi(
+            self,
+            "SubmissionApi",
+            job_table=self.audiology_table,
+            step_function=self.record_processing.step_function,
         )

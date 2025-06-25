@@ -11,6 +11,9 @@ logger.setLevel(logging.INFO)
 JOB_TABLE = os.environ.get("JOB_TABLE", None)
 dynamodb = boto3.client("dynamodb")
 
+step_function_arn = os.getenv("STEP_FUNCTION_ARN", None)
+sfn = boto3.client("stepfunctions")
+
 
 def job_exists(job_name: str) -> bool:
     """
@@ -52,11 +55,31 @@ def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
     dynamodb.put_item(TableName=JOB_TABLE, Item=job_record)
 
 
+def trigger_record_processing(job_name: str):
+    """
+    Triggers the step function for record processing with the given job name.
+    """
+
+    try:
+        response = sfn.start_execution(
+            stateMachineArn=step_function_arn,
+            input=json.dumps({"jobName": job_name}),
+        )
+        logger.info(
+            f"Step function triggered for job {job_name}. Execution ARN: {response['executionArn']}"
+        )
+        return response["executionArn"]
+    except Exception as e:
+        raise ValueError(f"Error triggering step function: {str(e)}") from e
+
+
 def handler(event: dict, context: dict) -> dict:
     """
     Responds to put events by logging the job and triggering a
     step function response.
     """
+    if step_function_arn is None:
+        raise ValueError("STEP_FUNCTION_ARN environment variable is not set.")
 
     logger.debug("Received event:", json.dumps(event, indent=2))
     records = event.get("Records", [])
@@ -80,10 +103,17 @@ def handler(event: dict, context: dict) -> dict:
                     logger.error(f"Error recording job: {str(e)}")
                     return {"statusCode": 400, "body": str(e)}
 
+                # TODO: more correct error handling
+                try:
+                    # TODO: return val
+                    trigger_record_processing(job_name)
+                    logger.info(f"Step function triggered for job {job_name}.")
+                except ValueError as e:
+                    logger.error(f"Error triggering step function: {str(e)}")
+                    return {"statusCode": 500, "body": str(e)}
+
             case _:
                 logger.info(f"Unhandled event type: {event_name}")
-
-        # TODO: trigger step function here
 
     return {
         "statusCode": 200,

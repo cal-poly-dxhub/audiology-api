@@ -7,7 +7,7 @@ dynamodb = boto3.client("dynamodb")
 job_table = os.getenv("JOB_TABLE", None)
 
 
-def handle_connect(connection_id: str, headers: dict) -> dict:
+def handle_connect(connection_id: str, domain_name: str, headers: dict) -> dict:
     """
     Stores the connection ID in Dynamo, taking a Job-Name in headers.
     """
@@ -32,12 +32,15 @@ def handle_connect(connection_id: str, headers: dict) -> dict:
         }
 
     try:
-        # Update job name with connection ID
+        # Update job table with connection ID and domain name
         response = dynamodb.update_item(
             TableName=job_table,
             Key={"job_name": {"S": job_name}},
-            UpdateExpression="SET connection_id = :connection_id",
-            ExpressionAttributeValues={":connection_id": {"S": connection_id}},
+            UpdateExpression="SET connection_id = :connection_id, domain_name = :domain_name",
+            ExpressionAttributeValues={
+                ":connection_id": {"S": connection_id},
+                ":domain_name": {"S": domain_name},
+            },
             ReturnValues="UPDATED_NEW",
         )
 
@@ -94,6 +97,7 @@ def handle_disconnect(connection_id: str) -> dict:
         }
 
     try:
+        # TODO: need to delete by job id or index by connnection id
         response = dynamodb.delete_item(
             TableName=job_table,
             Key={"connection_id": {"S": connection_id}},
@@ -170,13 +174,27 @@ def handler(event, context):
 
     print(f"Received event: {json.dumps(event, indent=2)}")
     print("Got message")
+
+    return_val = None
     match route_key:
         case "$connect":
-            return handle_connect(connection_id, headers)
+            print("Handling connect route")
+            return_val = handle_connect(connection_id, domain_name, headers)
+
         case "$disconnect":
-            return handle_disconnect(connection_id)
+            print("Handling disconnect route")
+            return_val = handle_disconnect(connection_id)
+
         case "$default":
-            return handle_default(event, connection_id, domain_name, stage)
+            print("Handling default route")
+            return_val = handle_default(event, connection_id, domain_name, stage)
+
         case _:
             print("Route not handled in match case")
-            return {"statusCode": 200, "body": "Route not handled."}
+            return_val = {
+                "statusCode": 400,
+                "body": f"Unhandled route: {route_key}",
+            }
+
+    print(f"Returning: {json.dumps(return_val, indent=2)}")
+    return return_val

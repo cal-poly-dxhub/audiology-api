@@ -9,6 +9,7 @@ from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_s3_notifications as s3n
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_stepfunctions as stepfunctions
 
 
 POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSLambdaPowertoolsPythonV3-python39-x86_64:18"
@@ -20,6 +21,7 @@ class SubmissionApi(Construct):
         scope: Construct,
         construct_id: str,
         job_table: dynamodb.Table,
+        step_function: stepfunctions.StateMachine,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -55,10 +57,12 @@ class SubmissionApi(Construct):
             environment={
                 "BUCKET_NAME": self.bucket.bucket_name,
                 "JOB_TABLE": job_table.table_name,
+                "STEP_FUNCTION_ARN": step_function.state_machine_arn,
             },
         )
 
         self.bucket.grant_read(bucket_response)
+        step_function.grant_start_execution(bucket_response)
 
         job_table.grant_read_write_data(bucket_response)
 
