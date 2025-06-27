@@ -24,10 +24,27 @@ class RecordProcessing(Construct):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        inference_profile_arn = "arn:aws:bedrock:us-west-2:762233745628:inference-profile/us.amazon.nova-pro-v1:0"
-
         self.region = Stack.of(self).region
         self.account = Stack.of(self).account
+
+        regions = [
+            "us-east-1",
+            "us-east-2",
+            "us-west-1",
+            "us-west-2",
+        ]
+
+        inference_profiles = [
+            f"arn:aws:bedrock:{region}:{self.account}:inference-profile/us.amazon.nova-pro-v1:0"
+            for region in regions
+        ]
+
+        model_arns = [
+            f"arn:aws:bedrock:{region}::foundation-model/amazon.nova-pro-v1:0"
+            for region in regions
+        ]
+
+        main_inference_profile = f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/us.amazon.nova-pro-v1:0"
 
         record_processor_lambda = _lambda.Function(
             self,
@@ -50,7 +67,7 @@ class RecordProcessing(Construct):
             environment={
                 "JOB_TABLE": job_table.table_name,
                 "CONFIG_TABLE": config_table.table_name,
-                "INFERENCE_PROFILE_ARN": inference_profile_arn,
+                "INFERENCE_PROFILE_ARN": main_inference_profile,
                 "BUCKET_NAME": bucket.bucket_name,
             },
         )
@@ -60,8 +77,8 @@ class RecordProcessing(Construct):
         config_table.grant_read_data(record_processor_lambda)
         record_processor_lambda.add_to_role_policy(
             iam.PolicyStatement(
-                actions=["bedrock:InvokeModelWithResponseStream"],
-                resources=[inference_profile_arn],
+                actions=["bedrock:InvokeModel"],
+                resources=model_arns + inference_profiles,
             )
         )
 
