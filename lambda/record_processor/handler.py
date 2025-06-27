@@ -61,12 +61,17 @@ def retrieve_config(config_id: str) -> dict:
             TableName=config_table,
             Key={"config_id": {"S": config_id}},
         )
-        config = config_response.get("Item", {}).get("config_data", None)
+        config = config_response.get("Item", {}).get("config_data", None).get("S", None)
     except Exception as e:
         raise ValueError(f"Error retrieving config: {str(e)}") from e
 
     if config is None:
         raise ValueError(f"No config found for config_id: {config_id}")
+    else:
+        try:
+            config = json.loads(config)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Error parsing config JSON: {str(e)}") from e
 
     return config
 
