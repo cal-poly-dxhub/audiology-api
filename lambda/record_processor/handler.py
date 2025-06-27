@@ -208,7 +208,9 @@ def categorize_diagnosis_with_lm(
         else:
             return {"output": results_json}
     except json.JSONDecodeError as e:
-        logger.error(f"Error decoding JSON from LLM output: {str(e)}")
+        logger.error(
+            f"Error decoding JSON from LLM output: {str(e)}. LLM output: {results}"
+        )
         return {"error": f"Unable to process record due to JSON parsing error."}
 
 
@@ -282,15 +284,16 @@ def process_job(job_name: str) -> dict:
 
     logger.info(f"Retrieved job file content: {body[:100]}...")  # Log first 100 chars
 
-    # processing_result = process_audiology_data(
-    #     input_report=body,
-    #     institution="Redcap",
-    #     config=config,
-    # )
+    processing_result = process_audiology_data(
+        input_report=body,
+        # TODO: pass inst. on job upload api call
+        institution="Redcap",
+        config=config,
+    )
 
     # TODO: on error, return error JSON out of step stage instead of passing
     # back error all the way to the client.
-    return {"output": "test output"}
+    return processing_result
 
 
 def handler(event, context):

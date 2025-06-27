@@ -106,7 +106,7 @@ def send_to_client(
             "apigatewaymanagementapi", endpoint_url=f"https://{domain_name}/{stage}"
         )
         apigw_management_api.post_to_connection(
-            ConnectionId=connection_id, Data=json.dumps(data)
+            ConnectionId=connection_id, Data=json.dumps(data, indent=2)
         )
     except Exception as e:
         print(f"Error sending message to client: {str(e)}")
@@ -123,6 +123,9 @@ def handler(event, context):
 
     execution_arn = event.get("executionId", None)
     job_name = event.get("recordProcessorOutput", {}).get("jobName", None)
+    result = event.get("recordProcessorOutput", {}).get("result", None)
+
+    print(f"Job output from record processor: {result}")
 
     print(
         "Completion recorder invoked for job:",
@@ -141,7 +144,7 @@ def handler(event, context):
 
     # TODO: error checking
     log_execution_arn(execution_arn, job_name)
-    report_job_completion(job_name, {"Logged for job": job_name})
+    report_job_completion(job_name, result)
 
     print("Completion recorder finished processing for job:", job_name)
 
