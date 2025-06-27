@@ -1,4 +1,4 @@
-from aws_cdk import RemovalPolicy, Stack
+from aws_cdk import RemovalPolicy, Stack, aws_s3 as s3
 from constructs import Construct
 from cdk.record_processing import RecordProcessing
 from cdk.submission_api import SubmissionApi
@@ -31,6 +31,16 @@ class AudiologyApiStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
+        self.bucket = s3.Bucket(
+            self,
+            "AudiologyBucket",
+            versioned=True,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=False,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            public_read_access=False,
+        )
+
         self.web_socket_api = WebSocketApi(
             self,
             "WebSocketApi",
@@ -43,6 +53,7 @@ class AudiologyApiStack(Stack):
             job_table=self.audiology_table,
             websocket_api_id=self.web_socket_api.websocket_api_id,
             config_table=self.config_table,
+            bucket=self.bucket,
         )
 
         self.submission_api = SubmissionApi(
@@ -51,4 +62,5 @@ class AudiologyApiStack(Stack):
             job_table=self.audiology_table,
             step_function=self.record_processing.step_function,
             config_table=self.config_table,
+            bucket=self.bucket,
         )

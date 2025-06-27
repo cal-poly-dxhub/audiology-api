@@ -1,6 +1,7 @@
 from aws_cdk import (
     Stack,
     aws_iam as iam,
+    aws_s3 as s3,
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
     aws_lambda as _lambda,
@@ -18,6 +19,7 @@ class RecordProcessing(Construct):
         job_table: dynamodb.Table,
         websocket_api_id: str,
         config_table: dynamodb.Table,
+        bucket: s3.Bucket,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)

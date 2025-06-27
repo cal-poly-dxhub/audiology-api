@@ -23,19 +23,10 @@ class SubmissionApi(Construct):
         job_table: dynamodb.Table,
         step_function: stepfunctions.StateMachine,
         config_table: dynamodb.Table,
+        bucket: s3.Bucket,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
-
-        self.bucket = s3.Bucket(
-            self,
-            "AudiologyBucket",
-            versioned=True,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=False,
-            encryption=s3.BucketEncryption.S3_MANAGED,
-            public_read_access=False,
-        )
 
         bucket_response = _lambda.Function(
             self,
@@ -56,19 +47,19 @@ class SubmissionApi(Construct):
             timeout=Duration.seconds(15),
             memory_size=512,
             environment={
-                "BUCKET_NAME": self.bucket.bucket_name,
+                "BUCKET_NAME": bucket.bucket_name,
                 "JOB_TABLE": job_table.table_name,
                 "STEP_FUNCTION_ARN": step_function.state_machine_arn,
             },
         )
 
-        self.bucket.grant_read(bucket_response)
+        bucket.grant_read(bucket_response)
         step_function.grant_start_execution(bucket_response)
 
         job_table.grant_read_write_data(bucket_response)
 
         # Triggers for files of the form "input_reports/*.csv"
-        self.bucket.add_event_notification(
+        bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED_PUT,
             s3n.LambdaDestination(bucket_response),
             s3.NotificationKeyFilter(prefix="input_reports/", suffix=".csv"),
@@ -99,7 +90,7 @@ class SubmissionApi(Construct):
             timeout=Duration.seconds(15),
             memory_size=512,
             environment={
-                "BUCKET_NAME": self.bucket.bucket_name,
+                "BUCKET_NAME": bucket.bucket_name,
                 "TABLE_NAME": job_table.table_name,
                 "JOB_TABLE": job_table.table_name,
                 "CONFIG_TABLE_NAME": config_table.table_name,
@@ -108,7 +99,7 @@ class SubmissionApi(Construct):
         )
 
         config_table.grant_read_write_data(self.api_handler)
-        self.bucket.grant_put(self.api_handler)
+        bucket.grant_put(self.api_handler)
         job_table.grant_read_write_data(self.api_handler)
 
         self.api = apigateway.RestApi(
