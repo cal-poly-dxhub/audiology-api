@@ -145,7 +145,7 @@ def invoke_bedrock_model(prompt: str) -> str:
         "inferenceConfig": {
             "max_new_tokens": 4096,
             "temperature": 0.0,
-            "top_k": 250,
+            "top_k": 128,
             "top_p": 0.9,
             "stopSequences": ["\n\nHuman"],
         },
