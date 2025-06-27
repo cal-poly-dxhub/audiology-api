@@ -24,6 +24,8 @@ class RecordProcessing(Construct):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        inference_profile_arn = "arn:aws:bedrock:us-west-2:762233745628:inference-profile/us.amazon.nova-pro-v1:0"
+
         self.region = Stack.of(self).region
         self.account = Stack.of(self).account
 
@@ -48,10 +50,20 @@ class RecordProcessing(Construct):
             environment={
                 "JOB_TABLE": job_table.table_name,
                 "CONFIG_TABLE": config_table.table_name,
+                "INFERENCE_PROFILE_ARN": inference_profile_arn,
+                "BUCKET_NAME": bucket.bucket_name,
             },
         )
 
+        job_table.grant_read_data(record_processor_lambda)
+        bucket.grant_read(record_processor_lambda)
         config_table.grant_read_data(record_processor_lambda)
+        record_processor_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModelWithResponseStream"],
+                resources=[inference_profile_arn],
+            )
+        )
 
         completion_recorder_lambda = _lambda.Function(
             self,

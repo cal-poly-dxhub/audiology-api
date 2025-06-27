@@ -3,9 +3,6 @@ import os
 import boto3
 import json
 import logging
-from langchain_aws.chat_models import ChatBedrock
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -74,6 +71,105 @@ def retrieve_config(config_id: str) -> dict:
     return config
 
 
+def build_prompt(
+    report: str,
+    institution_template: dict,
+    valid_values: dict,
+    guidelines: list[dict] | None,
+) -> str:
+    """
+    Builds the complete prompt for the LLM without using LangChain templates.
+    """
+
+    # Format the JSON template by escaping braces
+    json_template_fixed = (
+        json.dumps(institution_template, indent=4).replace("{", "{{").replace("}", "}}")
+    )
+
+    # Build the system message
+    system_message = "You are an expert **pediatric** audiologist that extracts explicit hearing test data and classifies hearing loss accurately."
+
+    # Build the human message
+    human_message = f"""{report}
+
+**Use the classification template and guidelines** to determine:
+{json_template_fixed}
+
+**Valid Values:**
+```json
+{json.dumps(valid_values, indent=4)}
+```
+
+**Guidelines for Classification:**
+```json
+{json.dumps(guidelines, indent=4)}
+```
+
+**Processing Rules (MUST Follow):**
+- **Use only explicitly provided threshold values**; do not infer missing values.
+- **If multiple severities are listed, assign the most severe classification.**
+**Output Requirements:**
+- Return classification in **EXACT JSON format** as per the template, with no modifications.
+- Provide **precise reasoning** for each classification.
+- Make sure there is thorough, chain of thought reasoning for each attribute's output.
+- **Cite guideline numbers** when making classification decisions.
+- **DO NOT include any additional explanations, assumptions, or commentary.**
+"""
+
+    # Combine system and human messages in the format expected by Bedrock
+    full_prompt = f"System: {system_message}\n\nHuman: {human_message}\n\nAssistant:"
+
+    return full_prompt
+
+
+def invoke_bedrock_model(prompt: str) -> str:
+    """
+    Invokes the Bedrock model directly without LangChain.
+    """
+
+    inference_profile_arn = os.environ.get("INFERENCE_PROFILE_ARN", None)
+    if not inference_profile_arn:
+        raise ValueError("INFERENCE_PROFILE_ARN environment variable is not set.")
+
+    # Prepare the request body for Nova Pro
+    request_body = {
+        "messages": [{"role": "user", "content": [{"text": prompt}]}],
+        "inferenceConfig": {
+            "max_new_tokens": 4096,
+            "temperature": 0.0,
+            "top_k": 250,
+            "top_p": 0.9,
+            "stopSequences": ["\n\nHuman"],
+        },
+    }
+
+    try:
+        # Invoke the model using the inference profile
+        response = bedrock_runtime.invoke_model(
+            modelId=inference_profile_arn,
+            body=json.dumps(request_body),
+            contentType="application/json",
+            accept="application/json",
+        )
+
+        # Parse the response
+        response_body = json.loads(response["body"].read())
+
+        # Extract the generated text from Nova Pro response format
+        if "output" in response_body and "message" in response_body["output"]:
+            content = response_body["output"]["message"]["content"]
+            if content and len(content) > 0 and "text" in content[0]:
+                return content[0]["text"]
+
+        # Fallback for different response formats
+        logger.warning(f"Unexpected response format: {response_body}")
+        return str(response_body)
+
+    except Exception as e:
+        logger.error(f"Error invoking Bedrock model: {str(e)}")
+        raise
+
+
 def categorize_diagnosis_with_lm(
     report: str,
     institution_template: dict,
@@ -82,80 +178,24 @@ def categorize_diagnosis_with_lm(
 ) -> dict:
     """
     Uses LLM to extract explicit facts and classify hearing loss. Either produces
-    the output data JSON or None.
+    the output data JSON or None. This version doesn't use LangChain.
     """
 
-    inference_profile_arn = os.environ.get("INFERENCE_PROFILE_ARN", None)
-    if not inference_profile_arn:
-        raise ValueError("INFERENCE_PROFILE_ARN environment variable is not set.")
+    # Build the prompt
+    prompt = build_prompt(report, institution_template, valid_values, guidelines)
 
-    model_id = "us.amazon.nova-pro-v1:0"
-    model_kwargs = {
-        "max_tokens": 4096,
-        "temperature": 0.0,
-        "top_k": 250,
-        "top_p": 0.9,
-        "stop_sequences": ["\n\nHuman"],
-        "inference_profile_arn": inference_profile_arn,
-    }
-
-    model = ChatBedrock(
-        model=model_id,
-        client=bedrock_runtime,
-        model_kwargs=model_kwargs,
-    )
-
-    json_template_fixed = (
-        json.dumps(institution_template, indent=4).replace("{", "{{").replace("}", "}}")
-    )
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "You are an expert **pediatric** audiologist that extracts explicit hearing test data and classifies hearing loss accurately.",
-            ),
-            (
-                "human",
-                "{report_text}\n\n"
-                "**Use the classification template and guidelines** to determine:\n"
-                "{json_template}\n\n"
-                "**Valid Values:**\n```json\n{valid_values}\n```\n\n"
-                "**Guidelines for Classification:**\n```json\n{guidelines}\n```\n\n"
-                "**Processing Rules (MUST Follow):**\n"
-                "- **Use only explicitly provided threshold values**; do not infer missing values.\n"
-                "- **If multiple severities are listed, assign the most severe classification.**\n"
-                "**Output Requirements:**\n"
-                "- Return classification in **EXACT JSON format** as per the template, with no modifications.\n"
-                "- Provide **precise reasoning** for each classification.\n"
-                "- Make sure there is thorough, chain of thought reasoning for each attribute's output."
-                "- **Cite guideline numbers** when making classification decisions.\n"
-                "- **DO NOT include any additional explanations, assumptions, or commentary.**\n",
-            ),
-        ]
-    )
-
-    chain = prompt | model | StrOutputParser()
-
-    # TODO: better organize error handling
-    results = None
+    # Invoke the model
     try:
-        results = chain.invoke(
-            {
-                "report_text": report,
-                "json_template": json_template_fixed,
-                "valid_values": json.dumps(valid_values, indent=4),
-                "guidelines": json.dumps(guidelines, indent=4),
-            }
-        )
+        results = invoke_bedrock_model(prompt)
     except Exception as e:
         logger.error(f"Error during LLM invocation: {str(e)}")
         return {"error": f"LLM processor invocation failed."}
 
+    # Parse the JSON response
     try:
         results_json = json.loads(results)
         if not isinstance(results_json, dict):
-            logger.error("LLM output was not a valid JSON object: {results_json}")
+            logger.error(f"LLM output was not a valid JSON object: {results_json}")
             return {"error": "LLM output was not a valid JSON object."}
         else:
             return {"output": results_json}
@@ -190,7 +230,7 @@ def process_audiology_data(input_report: str, institution: str, config: dict) ->
         )
         return {"error": f"No processing guidelines found for '{institution}'."}
 
-    # TODO: this could error
+    # Process using the LLM without LangChain
     diagnosis_results = categorize_diagnosis_with_lm(
         report=input_report,
         institution_template=institution_template,
