@@ -52,11 +52,14 @@ def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
         dynamodb.update_item(
             TableName=JOB_TABLE,
             Key={"job_name": {"S": job_name}},
-            UpdateExpression="SET input_s3_path = :s3_path, #status = :status",
-            ExpressionAttributeNames={"#status": "status"},
+            UpdateExpression="SET input_bucket = :input_bucket, input_key = :input_key, #status = :status",
             ExpressionAttributeValues={
-                ":s3_path": {"S": s3_path},
+                ":input_bucket": {"S": bucket_name},
+                ":input_key": {"S": input_key},
                 ":status": {"S": "created"},
+            },
+            ExpressionAttributeNames={
+                "#status": "status",
             },
         )
 
