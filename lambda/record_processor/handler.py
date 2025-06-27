@@ -119,7 +119,10 @@ def build_prompt(
 - Make sure there is thorough, chain of thought reasoning for each attribute's output.
 - **Cite guideline numbers** when making classification decisions.
 - **DO NOT include any additional explanations, assumptions, or commentary.**
+- Do NOT include code block formatting (e.g., ```json or ```) in the output; output RAW JSON only.
 """
+
+    # TODO: parse to regex-retrieve JSON.
 
     # Combine system and human messages in the format expected by Bedrock
     full_prompt = f"System: {system_message}\n\nHuman: {human_message}\n\nAssistant:"
