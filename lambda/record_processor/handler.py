@@ -230,6 +230,55 @@ def invoke_bedrock_model(prompt: str) -> str:
         raise
 
 
+def job_exists(job_name: str) -> bool:
+    """
+    Checks if a job with the given name already exists in DynamoDB.
+    """
+
+    job_table = os.environ.get("JOB_TABLE", None)
+    if not job_table:
+        raise ValueError("JOB_TABLE environment variable is not set.")
+
+    try:
+        response = dynamodb.get_item(
+            TableName=job_table,
+            Key={"job_name": {"S": job_name}},
+        )
+        return "Item" in response
+    except Exception as e:
+        raise ValueError(f"Error checking job existence: {str(e)}") from e
+
+
+def log_execution_arn(execution_arn: str, job_name: str) -> None:
+    """
+    Records the execution ARN for the job in DynamoDB.
+    """
+
+    job_table = os.environ.get("JOB_TABLE", None)
+    if not job_table:
+        raise ValueError("JOB_TABLE environment variable is not set.")
+
+    if not job_exists(job_name):
+        raise ValueError(f"Job with name {job_name} does not exist.")
+
+    # TODO: error checking
+    try:
+        print("Updating DynamoDB with execution ARN")
+        dynamodb.update_item(
+            TableName=job_table,
+            Key={"job_name": {"S": job_name}},
+            UpdateExpression="SET execution_arn = :execution_arn",
+            ExpressionAttributeValues={":execution_arn": {"S": execution_arn}},
+            ConditionExpression="attribute_exists(job_name)",
+            ReturnValues="UPDATED_NEW",
+        )
+        print("Updated dynamodb with execution ARN for job:", job_name)
+    except dynamodb.exceptions.ConditionalCheckFailedException:
+        raise ValueError(f"Job with name {job_name} does not exist.")
+    except Exception as e:
+        raise ValueError(f"Error logging execution ARN: {str(e)}") from e
+
+
 def categorize_diagnosis_with_lm(
     report: str,
     institution_template: dict,
@@ -355,6 +404,10 @@ def handler(event, context):
     job_name = event.get("jobName")
     if not job_name:
         raise ValueError("jobName is required in the event")
+
+    execution_arn = event.get("executionId", None)
+    if not execution_arn:
+        raise ValueError("executionId is required in the event")
 
     processing_result = process_job(job_name=job_name)
 

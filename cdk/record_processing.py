@@ -73,7 +73,7 @@ class RecordProcessing(Construct):
             },
         )
 
-        job_table.grant_read_data(record_processor_lambda)
+        job_table.grant_read_write_data(record_processor_lambda)
         bucket.grant_read(record_processor_lambda)
         config_table.grant_read_data(record_processor_lambda)
         record_processor_lambda.add_to_role_policy(
@@ -119,21 +119,22 @@ class RecordProcessing(Construct):
             )
         )
 
+        # Adds the execution ID to the payload for the record processor
+        prep_payload = sfn.Pass(
+            self,
+            "PrepareStepPayload",
+            parameters={
+                "jobName.$": "$.jobName",
+                "executionId.$": "$$.Execution.Id",
+            },
+        )
+
         # Passes job name and execution ID to the record processor in payload
         record_processor_task = tasks.LambdaInvoke(
             self,
             "RecordProcessorTask",
             lambda_function=record_processor_lambda,
             output_path="$.Payload",  # Pass the record processor output to the completion recorder
-        )
-
-        merge_execution_id = sfn.Pass(
-            self,
-            "MergeExecutionId",
-            parameters={
-                "executionId.$": "$$.Execution.Id",
-                "recordProcessorOutput.$": "$",
-            },
         )
 
         completion_recorder_task = tasks.LambdaInvoke(
@@ -144,7 +145,7 @@ class RecordProcessing(Construct):
 
         output_bucket.grant_put(completion_recorder_lambda)
 
-        definition = record_processor_task.next(merge_execution_id)
+        definition = prep_payload.next(record_processor_task)
         definition = definition.next(completion_recorder_task)
 
         self.step_function = sfn.StateMachine(

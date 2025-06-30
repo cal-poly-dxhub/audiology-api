@@ -6,46 +6,6 @@ job_table = os.getenv("JOB_TABLE", None)
 dynamodb = boto3.client("dynamodb")
 
 
-def job_exists(job_name: str) -> bool:
-    """
-    Checks if a job with the given name already exists in DynamoDB.
-    """
-
-    try:
-        response = dynamodb.get_item(
-            TableName=job_table,
-            Key={"job_name": {"S": job_name}},
-        )
-        return "Item" in response
-    except Exception as e:
-        raise ValueError(f"Error checking job existence: {str(e)}") from e
-
-
-def log_execution_arn(execution_arn: str, job_name: str) -> None:
-    """
-    Records the execution ARN for the job in DynamoDB.
-    """
-    if not job_exists(job_name):
-        raise ValueError(f"Job with name {job_name} does not exist.")
-
-    # TODO: error checking
-    try:
-        print("Updating DynamoDB with execution ARN")
-        dynamodb.update_item(
-            TableName=job_table,
-            Key={"job_name": {"S": job_name}},
-            UpdateExpression="SET execution_arn = :execution_arn",
-            ExpressionAttributeValues={":execution_arn": {"S": execution_arn}},
-            ConditionExpression="attribute_exists(job_name)",
-            ReturnValues="UPDATED_NEW",
-        )
-        print("Updated dynamodb with execution ARN for job:", job_name)
-    except dynamodb.exceptions.ConditionalCheckFailedException:
-        raise ValueError(f"Job with name {job_name} does not exist.")
-    except Exception as e:
-        raise ValueError(f"Error logging execution ARN: {str(e)}") from e
-
-
 def get_connection_details(job_table, job_name):
     try:
         # Retrieve connection_id and dnomain_name from DynamoDB
@@ -141,23 +101,23 @@ def send_to_client(
 
 def handler(event, context):
     """
-    Assumes the step function ARN and the job name are passed in the event.
+    Requires that a jobName and result to stream back over websocket are both passed.
     """
 
     if job_table is None:
         raise ValueError("JOB_TABLE environment variable is not set.")
 
-    execution_arn = event.get("executionId", None)
-    job_name = event.get("recordProcessorOutput", {}).get("jobName", None)
-    result = event.get("recordProcessorOutput", {}).get("result", None)
+    job_name = event.get("jobName", None)
+    result = event.get("result", None)
+
+    if not job_name or not result:
+        raise ValueError("Event does not contain required fields: jobName or result.")
 
     print(f"Job output from record processor: {result}")
 
     print(
         "Completion recorder invoked for job:",
         job_name,
-        "with execution ARN:",
-        execution_arn,
     )
 
     if not job_name:
@@ -169,7 +129,6 @@ def handler(event, context):
     print("Logging for job:", job_name)
 
     # TODO: error checking
-    log_execution_arn(execution_arn, job_name)
     report_job_completion(job_name, result)
 
     print("Completion recorder finished processing for job:", job_name)
