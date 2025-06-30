@@ -108,6 +108,13 @@ def upload_handler():
             "headers": {"Content-Type": "application/json"},
         }
 
+    if config_id is None:
+        logger.error("Config ID is missing in the request")
+        return {
+            "statusCode": 400,
+            "body": "Bad Request: Config ID is required.",
+            "headers": {"Content-Type": "application/json"},
+        }
     logger.debug(f"Job name: {job_name}")
     stamp = datetime.now().strftime("%Y%m%d%H%M%S")
     file_key = f"input_reports/{stamp}/{job_name}.csv"
