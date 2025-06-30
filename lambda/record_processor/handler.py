@@ -1,5 +1,7 @@
 import time
 import os
+import traceback
+import botocore
 import boto3
 import json
 import logging
@@ -13,71 +15,83 @@ dynamodb = boto3.client("dynamodb")
 s3 = boto3.client("s3")
 
 BUCKET_NAME = os.environ["BUCKET_NAME"]
+JOB_TABLE = os.environ.get("JOB_TABLE", None)
+CONFIG_TABLE = os.environ.get("CONFIG_TABLE", None)
 
 
 def retrieve_job_info(job_name: str) -> tuple[str, str, str, str]:
-    job_table = os.environ.get("JOB_TABLE", None)
-
-    if not job_table:
-        raise ValueError("JOB_TABLE environment variable is not set.")
 
     try:
         job_response = dynamodb.get_item(
-            TableName=job_table,
+            TableName=JOB_TABLE,
             Key={"job_name": {"S": job_name}},
         )
-
-        job_item = job_response.get("Item", None)
-        if job_item is None:
-            raise ValueError(f"No job found with name: {job_name}")
-
-        input_bucket = job_item.get("input_bucket", {}).get("S", None)
-        if input_bucket is None:
-            raise ValueError(f"No input bucket found in job table for job: {job_name}")
-
-        input_key = job_item.get("input_key", {}).get("S", None)
-        if input_key is None:
-            raise ValueError(f"No input key found in job table for job: {job_name}")
-
-        config_id = job_item.get("config_id", {}).get("S", None)
-        if config_id is None:
-            raise ValueError(f"No config ID found in job table for job: {job_name}")
-
-        institution_id = job_item.get("institution_id", {}).get("S", None)
-        if institution_id is None:
-            raise ValueError(
-                f"No institution ID found in job table for job: {job_name}"
-            )
-
-        return config_id, input_bucket, input_key, institution_id
-
     except Exception as e:
-        raise ValueError(f"Error retrieving job info: {str(e)}") from e
+        logger.error(
+            f"Error retrieving job info from DynamoDB: {traceback.format_exc()}"
+        )
+        raise Exception(f"Error retrieving job info for job: {job_name}") from e
+
+    job_item = job_response["Item"]
+    if not job_item:
+        raise ValueError(f"No job found with name: {job_name}")
+
+    input_bucket = job_item.get("input_bucket", {}).get("S", None)
+    input_key = job_item.get("input_key", {}).get("S", None)
+    config_id = job_item.get("config_id", {}).get("S", None)
+    institution_id = job_item.get("institution_id", {}).get("S", None)
+
+    if (
+        input_bucket is None
+        or input_key is None
+        or config_id is None
+        or institution_id is None
+    ):
+        logger.error(
+            f"Missing required fields in job item for job: {job_name}. "
+            f"input_bucket: {input_bucket}, input_key: {input_key}, "
+            f"config_id: {config_id}, institution_id: {institution_id}"
+        )
+        raise ValueError("Missing internal information for job")
+
+    return (
+        config_id,
+        input_bucket,
+        input_key,
+        institution_id,
+    )
 
 
 def retrieve_config(config_id: str) -> dict:
-    config_table = os.environ.get("CONFIG_TABLE", None)
-
-    if not config_table:
-        raise ValueError("CONFIG_TABLE environment variable is not set.")
-
     config = None
+    config_response = None
+
     try:
         config_response = dynamodb.get_item(
-            TableName=config_table,
+            TableName=CONFIG_TABLE,
             Key={"config_id": {"S": config_id}},
         )
-        config = config_response.get("Item", {}).get("config_data", None).get("S", None)
     except Exception as e:
-        raise ValueError(f"Error retrieving config: {str(e)}") from e
+        logger.error(f"Error retrieving config from DynamoDB: {traceback.format_exc()}")
+        raise ValueError("Error retrieving configuration for job.") from e
 
-    if config is None:
-        raise ValueError(f"No config found for config_id: {config_id}")
+    if config_response is None:
+        raise ValueError(
+            f"No config found for config_id: {config_id}. Was one uploaded?"
+        )
     else:
+        config = config_response.get("Item", {}).get("config_data", {}).get("S", None)
+        if config is None:
+            raise ValueError(f"No config data found for config_id: {config_id}")
+
         try:
             config = json.loads(config)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Error parsing config JSON: {str(e)}") from e
+            logger.error(
+                f"Error parsing config JSON for config_id {config_id}: {traceback.format_exc()}"
+            )
+
+            raise ValueError("Error processing configuration for job.") from e
 
     return config
 
@@ -106,7 +120,7 @@ If the JSON can't be fixed using simple corrections (e.g., the error is not a JS
     e = error_message
     for i in range(3):
         logger.warning(
-            f"LLM output was not valid JSON, attempting correction {i + 1}/3: {str(e)}"
+            f"LLM output was not valid JSON, attempting correction {i + 1}/3: {traceback.format_exc()}"
         )
 
         try:
@@ -120,7 +134,7 @@ If the JSON can't be fixed using simple corrections (e.g., the error is not a JS
 
         except json.JSONDecodeError as next_error:
             logger.error(
-                f"Error correcting JSON from LLM output: {str(e)}. Attempt {i + 1}/3 failed."
+                f"Error correcting JSON from LLM output: {traceback.format_exc()}. Attempt {i + 1}/3 failed."
             )
             e = next_error
 
@@ -226,7 +240,7 @@ def invoke_bedrock_model(prompt: str) -> str:
         return str(response_body)
 
     except Exception as e:
-        logger.error(f"Error invoking Bedrock model: {str(e)}")
+        logger.error(f"Error invoking Bedrock model: {traceback.format_exc()}")
         raise
 
 
@@ -235,18 +249,16 @@ def job_exists(job_name: str) -> bool:
     Checks if a job with the given name already exists in DynamoDB.
     """
 
-    job_table = os.environ.get("JOB_TABLE", None)
-    if not job_table:
-        raise ValueError("JOB_TABLE environment variable is not set.")
-
     try:
         response = dynamodb.get_item(
-            TableName=job_table,
+            TableName=JOB_TABLE,
             Key={"job_name": {"S": job_name}},
         )
         return "Item" in response
     except Exception as e:
-        raise ValueError(f"Error checking job existence: {str(e)}") from e
+        raise ValueError(
+            f"Error checking job existence: {traceback.format_exc()}"
+        ) from e
 
 
 def log_execution_arn(execution_arn: str, job_name: str) -> None:
@@ -254,18 +266,10 @@ def log_execution_arn(execution_arn: str, job_name: str) -> None:
     Records the execution ARN for the job in DynamoDB.
     """
 
-    job_table = os.environ.get("JOB_TABLE", None)
-    if not job_table:
-        raise ValueError("JOB_TABLE environment variable is not set.")
-
-    if not job_exists(job_name):
-        raise ValueError(f"Job with name {job_name} does not exist.")
-
-    # TODO: error checking
     try:
         print("Updating DynamoDB with execution ARN")
         dynamodb.update_item(
-            TableName=job_table,
+            TableName=JOB_TABLE,
             Key={"job_name": {"S": job_name}},
             UpdateExpression="SET execution_arn = :execution_arn",
             ExpressionAttributeValues={":execution_arn": {"S": execution_arn}},
@@ -276,7 +280,10 @@ def log_execution_arn(execution_arn: str, job_name: str) -> None:
     except dynamodb.exceptions.ConditionalCheckFailedException:
         raise ValueError(f"Job with name {job_name} does not exist.")
     except Exception as e:
-        raise ValueError(f"Error logging execution ARN: {str(e)}") from e
+        logger.error(
+            f"Error updating DynamoDB with execution ARN: {traceback.format_exc()}"
+        )
+        raise Exception("Error logging execution details for job.") from e
 
 
 def categorize_diagnosis_with_lm(
@@ -297,7 +304,7 @@ def categorize_diagnosis_with_lm(
     try:
         results = invoke_bedrock_model(prompt)
     except Exception as e:
-        logger.error(f"Error during LLM invocation: {str(e)}")
+        logger.error(f"Error during LLM invocation: {traceback.format_exc()}")
         return {"error": f"LLM processor invocation failed."}
 
     # Parse the JSON response
@@ -355,10 +362,16 @@ def retrieve_job_str(input_bucket: str, input_key: str) -> str:
     """
     try:
         response = s3.get_object(Bucket=input_bucket, Key=input_key)
-        body = response["Body"].read()
-        return body.decode("utf-8")  # Decoding bytes to string
     except Exception as e:
-        raise ValueError(f"Error retrieving job file: {str(e)}") from e
+        logger.error(f"Error retrieving job file from S3: {e}")
+        raise Exception("Error retrieving job file from S3.") from e
+
+    try:
+        body = response["Body"].read().decode("utf-8")
+        return body
+    except Exception as e:
+        logger.error(f"Error reading job file content: {e}")
+        raise Exception("Error reading job file contents.") from e
 
 
 def process_job(job_name: str) -> dict:
@@ -375,10 +388,13 @@ def process_job(job_name: str) -> dict:
         f"Record processor got job name: {job_name} with config ID: {config_id} and input bucket: {input_bucket}, input key: {input_key}"
     )
 
-    body = retrieve_job_str(
-        input_bucket=input_bucket,
-        input_key=input_key,
-    )
+    try:
+        body = retrieve_job_str(
+            input_bucket=input_bucket,
+            input_key=input_key,
+        )
+    except Exception as e:
+        return {"error": f"Error retrieving job file: {str(e)}"}
 
     logger.info(f"Retrieved job file content: {body[:100]}...")  # Log first 100 chars
 
@@ -401,15 +417,60 @@ def handler(event, context):
     {"output": {...}} or {"error": "..."}.
     """
 
-    job_name = event.get("jobName")
-    if not job_name:
-        raise ValueError("jobName is required in the event")
+    if JOB_TABLE is None:
+        logger.error("JOB_TABLE environment variable is not set.")
+        return {
+            "statusCode": 500,
+            "result": {"error": "Internal server error."},
+            "jobName": None,
+        }
 
+    if BUCKET_NAME is None:
+        logger.error("BUCKET_NAME environment variable is not set.")
+        return {
+            "statusCode": 500,
+            "result": {"error": "Internal server error."},
+            "jobName": None,
+        }
+
+    if CONFIG_TABLE is None:
+        logger.error("CONFIG_TABLE environment variable is not set.")
+        return {
+            "statusCode": 500,
+            "result": {"error": "Internal server error."},
+            "jobName": None,
+        }
+
+    job_name = event.get("jobName", None)
     execution_arn = event.get("executionId", None)
-    if not execution_arn:
-        raise ValueError("executionId is required in the event")
 
-    processing_result = process_job(job_name=job_name)
+    if not (job_name and execution_arn):
+        logger.error("Bucket responses lanbda did not pass jobName and executionId.")
+        return {
+            "statusCode": 500,
+            "result": {"error": "Error starting job execution."},
+            "jobName": job_name,
+        }
+
+    try:
+        log_execution_arn(execution_arn=execution_arn, job_name=job_name)
+    except Exception as e:
+        logger.error(f"Error logging execution ARN: {traceback.format_exc()}")
+        return {
+            "statusCode": 500,
+            "result": {"error": f"Error logging execution details: {str(e)}"},
+            "jobName": job_name,
+        }
+
+    try:
+        processing_result = process_job(job_name=job_name)
+    except Exception as e:
+        logger.error(f"Error processing job {job_name}: {traceback.format_exc()}")
+        return {
+            "statusCode": 500,
+            "result": {"error": f"Error processing job: {str(e)}"},
+            "jobName": job_name,
+        }
 
     return {
         "statusCode": 200,
