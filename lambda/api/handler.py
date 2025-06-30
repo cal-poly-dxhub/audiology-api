@@ -86,11 +86,21 @@ def upload_handler():
             "headers": {"Content-Type": "application/json"},
         }
 
+    supported_types = {
+        "text/csv": {
+            "extension": "csv",
+        },
+        "application/json": {
+            "extension": "json",
+        },
+    }
+
     event = resolver.current_event
     json_body = event.json_body
     job_name = json_body.get("job_name", None)
     config_id = json_body.get("config_id", None)
     institution_id = json_body.get("institution_id", None)
+    mime_type = json_body.get("mime_type", None)
 
     if job_name is None:
         logger.error("Filename is missing in the request")
@@ -115,9 +125,25 @@ def upload_handler():
             "body": "Bad Request: Config ID is required.",
             "headers": {"Content-Type": "application/json"},
         }
+
+    if mime_type is None:
+        logger.error("MIME type is missing in the request")
+        return {
+            "statusCode": 400,
+            "body": "Bad Request: MIME type is required.",
+            "headers": {"Content-Type": "application/json"},
+        }
+
+    if mime_type not in supported_types:
+        logger.error(f"Unsupported file type: {mime_type}")
+        return {
+            "statusCode": 400,
+            "body": f"Bad Request: Unsupported file type '{mime_type}'. Supported types are {', '.join(supported_types.keys())}.",
+            "headers": {"Content-Type": "application/json"},
+        }
+
     logger.debug(f"Job name: {job_name}")
-    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    file_key = f"input_reports/{stamp}/{job_name}.csv"
+    file_key = f"input_reports/{job_name}.{supported_types[mime_type]['extension']}"
 
     # Generate a pre-signed URL for uploading the file
     try:
@@ -126,7 +152,7 @@ def upload_handler():
             Params={
                 "Bucket": bucket_name,
                 "Key": file_key,
-                "ContentType": "text/csv",
+                "ContentType": mime_type,
             },
             ExpiresIn=3600,  # URL expires in 1 hour
         )
