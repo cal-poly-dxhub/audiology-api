@@ -76,6 +76,51 @@ def retrieve_config(config_id: str) -> dict:
     return config
 
 
+def correct_json(json_str: str, error_message: str) -> dict:
+    """
+    Prompts LLM to correct the JSON string if it's not valid, using the context
+    provided in the error message.
+    """
+
+    # Build the prompt for the LLM
+    prompt = f"""
+You are a JSON validation and correction expert.
+
+The following JSON string is invalid:
+{json_str}
+
+The error encountered is:
+{error_message}
+
+Please correct the JSON string to make it valid. Ensure the corrected JSON adheres to the intended structure and content.
+Output only the corrected JSON, without any additional text or explanation.
+If the JSON can't be fixed using simple corrections (e.g., the error is not a JSON parsing error or the JSON is not recoverable), return "--" and nothing else. 
+"""
+
+    e = error_message
+    for i in range(3):
+        logger.warning(
+            f"LLM output was not valid JSON, attempting correction {i + 1}/3: {str(e)}"
+        )
+
+        try:
+            corrected_json = invoke_bedrock_model(prompt)
+            if corrected_json == "--":
+                logger.error("LLM output could not be corrected, returning error.")
+                return {"error": "LLM output could not be corrected."}
+            else:
+                results_json = json.loads(corrected_json)
+                return {"output": results_json}
+
+        except json.JSONDecodeError as next_error:
+            logger.error(
+                f"Error correcting JSON from LLM output: {str(e)}. Attempt {i + 1}/3 failed."
+            )
+            e = next_error
+
+    return {"error": f"Did not recover from JSON parsing error."}
+
+
 def build_prompt(
     report: str,
     institution_template: dict,
@@ -120,6 +165,7 @@ def build_prompt(
 - **Cite guideline numbers** when making classification decisions.
 - **DO NOT include any additional explanations, assumptions, or commentary.**
 - Do NOT include code block formatting (e.g., ```json or ```) in the output; output RAW JSON only.
+- Be certain the JSON output is valid; braces should be balanced, etc.
 """
 
     # TODO: parse to regex-retrieve JSON.
@@ -207,11 +253,8 @@ def categorize_diagnosis_with_lm(
             return {"error": "LLM output was not a valid JSON object."}
         else:
             return {"output": results_json}
-    except json.JSONDecodeError as e:
-        logger.error(
-            f"Error decoding JSON from LLM output: {str(e)}. LLM output: {results}"
-        )
-        return {"error": f"Unable to process record due to JSON parsing error."}
+    except json.JSONDecodeError as first_error:
+        return correct_json(results, str(first_error))
 
 
 def process_audiology_data(input_report: str, institution: str, config: dict) -> dict:

@@ -72,9 +72,33 @@ def get_connection_details(job_table, job_name):
         raise ValueError(f"Error retrieving connection details: {str(e)}") from e
 
 
+def place_job_s3(job_name: str, job_info: dict) -> None:
+    """
+    Logs the completed job JSON to S3.
+    """
+
+    bucket_name = os.getenv("BUCKET_NAME", None)
+    if not bucket_name:
+        raise ValueError("BUCKET_NAME environment variable is not set.")
+
+    s3 = boto3.client("s3")
+
+    try:
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=f"completed_jobs/{job_name}.json",
+            Body=json.dumps(job_info, indent=2),
+            ContentType="application/json",
+        )
+        print(f"Successfully logged job {job_name} to S3 bucket {bucket_name}")
+    except Exception as e:
+        raise ValueError(f"Error logging job to S3: {str(e)}") from e
+
+
 def report_job_completion(job_name: str, job_info: dict) -> None:
     """
-    Obtains a websocket connection for a job if it exists and sends a report.
+    Obtains a websocket connection for a job if it exists and sends a report. Logs the
+    completed job JSON to S3.
     """
 
     # TODO: error checking
