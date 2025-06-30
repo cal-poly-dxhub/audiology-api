@@ -77,9 +77,9 @@ def place_job_s3(job_name: str, job_info: dict) -> None:
     Logs the completed job JSON to S3.
     """
 
-    bucket_name = os.getenv("BUCKET_NAME", None)
+    bucket_name = os.getenv("OUTPUT_BUCKET_NAME", None)
     if not bucket_name:
-        raise ValueError("BUCKET_NAME environment variable is not set.")
+        raise ValueError("OUTPUT_BUCKET_NAME environment variable is not set.")
 
     s3 = boto3.client("s3")
 
@@ -117,6 +117,8 @@ def report_job_completion(job_name: str, job_info: dict) -> None:
         stage="prod",
         data=job_info,
     )
+
+    place_job_s3(job_name, job_info)
 
     if connection_id is not None:
         print(f"Sending report to connection {connection_id}: {job_info}")

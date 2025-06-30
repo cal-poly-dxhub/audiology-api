@@ -41,6 +41,16 @@ class AudiologyApiStack(Stack):
             public_read_access=False,
         )
 
+        self.output_bucket = s3.Bucket(
+            self,
+            "AudiologyOutputBucket",
+            versioned=True,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=False,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            public_read_access=False,
+        )
+
         self.web_socket_api = WebSocketApi(
             self,
             "WebSocketApi",
@@ -54,6 +64,7 @@ class AudiologyApiStack(Stack):
             websocket_api_id=self.web_socket_api.websocket_api_id,
             config_table=self.config_table,
             bucket=self.bucket,
+            output_bucket=self.output_bucket,
         )
 
         self.submission_api = SubmissionApi(

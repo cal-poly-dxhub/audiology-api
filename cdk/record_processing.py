@@ -20,6 +20,7 @@ class RecordProcessing(Construct):
         websocket_api_id: str,
         config_table: dynamodb.Table,
         bucket: s3.Bucket,
+        output_bucket: s3.Bucket,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -102,6 +103,7 @@ class RecordProcessing(Construct):
             memory_size=512,
             environment={
                 "JOB_TABLE": job_table.table_name,
+                "OUTPUT_BUCKET_NAME": output_bucket.bucket_name,
             },
         )
 
@@ -139,6 +141,8 @@ class RecordProcessing(Construct):
             "CompletionRecorderTask",
             lambda_function=completion_recorder_lambda,
         )
+
+        output_bucket.grant_put(completion_recorder_lambda)
 
         definition = record_processor_task.next(merge_execution_id)
         definition = definition.next(completion_recorder_task)
