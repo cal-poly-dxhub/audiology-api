@@ -40,6 +40,7 @@ def job_exists(job_name: str) -> bool:
 def create_dynamo_job(
     job_name: str,
     config_id: str,
+    institution_id: str,
 ) -> None:
 
     job_table = os.environ.get("JOB_TABLE", None)
@@ -55,6 +56,7 @@ def create_dynamo_job(
             Item={
                 "job_name": {"S": job_name},
                 "config_id": {"S": config_id},
+                "institution_id": {"S": institution_id},
                 "status": {"S": "created"},
             },
         )
@@ -88,12 +90,21 @@ def upload_handler():
     json_body = event.json_body
     job_name = json_body.get("job_name", None)
     config_id = json_body.get("config_id", None)
+    institution_id = json_body.get("institution_id", None)
 
     if job_name is None:
         logger.error("Filename is missing in the request")
         return {
             "statusCode": 400,
             "body": "Bad Request: Filename is required.",
+            "headers": {"Content-Type": "application/json"},
+        }
+
+    if institution_id is None:
+        logger.error("Institution ID is missing in the request")
+        return {
+            "statusCode": 400,
+            "body": "Bad Request: Institution ID is required.",
             "headers": {"Content-Type": "application/json"},
         }
 
@@ -126,6 +137,7 @@ def upload_handler():
         create_dynamo_job(
             job_name=job_name,
             config_id=config_id,
+            institution_id=institution_id,
         )
     except ValueError as e:
         logger.error(f"Error creating job in DynamoDB: {e}")

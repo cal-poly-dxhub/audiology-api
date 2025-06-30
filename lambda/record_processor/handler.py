@@ -15,7 +15,7 @@ s3 = boto3.client("s3")
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 
 
-def retrieve_job_info(job_name: str) -> tuple[str, str, str]:
+def retrieve_job_info(job_name: str) -> tuple[str, str, str, str]:
     job_table = os.environ.get("JOB_TABLE", None)
 
     if not job_table:
@@ -43,7 +43,13 @@ def retrieve_job_info(job_name: str) -> tuple[str, str, str]:
         if config_id is None:
             raise ValueError(f"No config ID found in job table for job: {job_name}")
 
-        return config_id, input_bucket, input_key
+        institution_id = job_item.get("institution_id", {}).get("S", None)
+        if institution_id is None:
+            raise ValueError(
+                f"No institution ID found in job table for job: {job_name}"
+            )
+
+        return config_id, input_bucket, input_key, institution_id
 
     except Exception as e:
         raise ValueError(f"Error retrieving job info: {str(e)}") from e
@@ -312,7 +318,7 @@ def process_job(job_name: str) -> dict:
     processed record.
     """
 
-    config_id, input_bucket, input_key = retrieve_job_info(job_name)
+    config_id, input_bucket, input_key, institution = retrieve_job_info(job_name)
 
     config = retrieve_config(config_id)
 
@@ -329,8 +335,7 @@ def process_job(job_name: str) -> dict:
 
     processing_result = process_audiology_data(
         input_report=body,
-        # TODO: pass inst. on job upload api call
-        institution="Redcap",
+        institution=institution,
         config=config,
     )
 
