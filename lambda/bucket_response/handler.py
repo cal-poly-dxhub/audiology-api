@@ -45,10 +45,10 @@ def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
 
     s3_path = f"s3://{bucket_name}/{input_key}"
 
-    try:
-        if not job_exists(job_name):
-            raise ValueError(f"Job with name {job_name} already exists.")
+    if not job_exists(job_name):
+        raise ValueError(f"Job with name {job_name} does not exist.")
 
+    try:
         dynamodb.update_item(
             TableName=JOB_TABLE,
             Key={"job_name": {"S": job_name}},
