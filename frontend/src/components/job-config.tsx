@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { toast } from "sonner"
-import { useState } from "react"
+import { useState, useRef } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -35,6 +35,9 @@ const formSchema = z.object({
 
 export function JobConfigForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadUrl, setUploadUrl] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -85,23 +88,31 @@ export function JobConfigForm() {
       console.log("API Response:", JSON.stringify(responseData, null, 2))
 
       if (responseData.statusCode != 200) {
+        // Extract error reason from response body
+        const errorReason = typeof responseData.body === 'string'
+          ? responseData.body
+          : responseData.body?.message || responseData.body || "An error occurred while submitting the job."
+
         toast.error("Job submission failed", {
-          description: responseData.body || "An error occurred while submitting the job.",
+          description: errorReason,
           action: {
             label: "Retry",
             onClick: () => onSubmit(values),
           },
         })
       } else {
+        // Extract upload URL from successful response
+        const uploadUrlFromResponse = responseData.body?.url
+
+        if (uploadUrlFromResponse) {
+          setUploadUrl(uploadUrlFromResponse)
+        }
+
         // Show success toast
         toast.success("Job submitted successfully!", {
-          description: `Job "${values.job_name}" has been created`,
-          action: {
-            label: "View Console",
-            onClick: () => console.log("Response data:", responseData),
-          },
+          description: `Job "${values.job_name}" has been created. You can now upload a file.`,
         })
-        form.reset()
+        // Don't reset form so user can see the upload button
       }
     } catch (error) {
       console.error("API Error:", error)
@@ -116,6 +127,55 @@ export function JobConfigForm() {
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleFileUpload() {
+    if (!uploadUrl || !fileInputRef.current?.files?.[0]) {
+      toast.error("No file selected", {
+        description: "Please select a file to upload.",
+      })
+      return
+    }
+
+    const file = fileInputRef.current.files[0]
+    setIsUploading(true)
+
+    try {
+      const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
+      }
+
+      toast.success("File uploaded successfully!", {
+        description: `${file.name} has been uploaded to S3.`,
+      })
+
+      // Reset upload state
+      setUploadUrl(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      form.reset()
+
+    } catch (error) {
+      console.error("Upload Error:", error)
+      toast.error("File upload failed", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred during upload",
+        action: {
+          label: "Retry",
+          onClick: () => handleFileUpload(),
+        },
+      })
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -182,6 +242,31 @@ export function JobConfigForm() {
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? "Submitting..." : "Submit Job"}
           </Button>
+
+          {/* File Upload Section */}
+          <div className="mt-4 space-y-4">
+            <div>
+              <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2">
+                Select file to upload
+              </label>
+              <input
+                id="file-upload"
+                ref={fileInputRef}
+                type="file"
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                disabled={!uploadUrl}
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={handleFileUpload}
+              className="w-full"
+              disabled={!uploadUrl || isUploading}
+              variant={uploadUrl ? "default" : "secondary"}
+            >
+              {isUploading ? "Uploading..." : uploadUrl ? "Upload File" : "Upload File (Submit job first)"}
+            </Button>
+          </div>
         </form>
       </Form>
     </div>

@@ -39,6 +39,20 @@ class AudiologyApiStack(Stack):
             auto_delete_objects=False,
             encryption=s3.BucketEncryption.S3_MANAGED,
             public_read_access=False,
+            cors=[
+                s3.CorsRule(
+                    allowed_methods=[
+                        s3.HttpMethods.GET,
+                        s3.HttpMethods.POST,
+                        s3.HttpMethods.PUT,
+                        s3.HttpMethods.DELETE,
+                        s3.HttpMethods.HEAD,
+                    ],
+                    allowed_origins=["*"],
+                    allowed_headers=["*"],
+                    max_age=3000,
+                )
+            ],
         )
 
         self.output_bucket = s3.Bucket(
