@@ -1,4 +1,7 @@
-from aws_lambda_powertools.event_handler.api_gateway import ApiGatewayResolver
+from aws_lambda_powertools.event_handler.api_gateway import (
+    ApiGatewayResolver,
+    CORSConfig,
+)
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from aws_lambda_powertools import Logger, Tracer
 import boto3
@@ -8,8 +11,15 @@ import json
 
 from botocore.utils import ClientError
 
+# Configure CORS options
+cors_config = CORSConfig(
+    allow_origin="*",  # or "*" for all origins
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["X-Custom-Header"],
+    max_age=3600,
+)
 
-resolver = ApiGatewayResolver()
+resolver = ApiGatewayResolver(cors=cors_config)
 tracer = Tracer(service="audiology-api-lambda")
 logger = Logger(service="audiology-api-lambda")
 
@@ -297,4 +307,6 @@ def handler(event: dict, context: LambdaContext) -> dict:
     """
     Handles API Gateway events.
     """
-    return resolver.resolve(event, context)
+    response = resolver.resolve(event, context)
+    logger.info(f"Response: {response}")
+    return response

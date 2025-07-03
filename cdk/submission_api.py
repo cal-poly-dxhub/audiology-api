@@ -102,11 +102,26 @@ class SubmissionApi(Construct):
         bucket.grant_put(self.api_handler)
         job_table.grant_read_write_data(self.api_handler)
 
+        cors_options = apigateway.CorsOptions(
+            allow_origins=apigateway.Cors.ALL_ORIGINS,
+            allow_methods=apigateway.Cors.ALL_METHODS,
+            allow_headers=[
+                "Content-Type",
+                "X-Amz-Date",
+                "Authorization",
+                "X-Api-Key",
+                "X-Amz-Security-Token",
+                "X-Amz-User-Agent",
+            ],
+            allow_credentials=False,
+        )
+
         self.api = apigateway.RestApi(
             self,
             "AudiologyApi",
             rest_api_name="Audiology API",
             description="File upload and job update API for the Audiology project.",
+            default_cors_preflight_options=cors_options,
         )
 
         upload_resource = self.api.root.add_resource("upload")

@@ -3,6 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { toast } from "sonner"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -32,6 +34,8 @@ const formSchema = z.object({
 })
 
 export function JobConfigForm() {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,7 +46,9 @@ export function JobConfigForm() {
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true)
+
     // Format the data to match the API structure
     const jobData = {
       job_name: values.job_name,
@@ -51,11 +57,66 @@ export function JobConfigForm() {
       mime_type: values.mime_type
     }
 
-    console.log("Job Configuration:", JSON.stringify(jobData, null, 2))
-    alert("Job configuration submitted! Check the console for JSON output.")
+    try {
+      const endpoint = process.env.NEXT_PUBLIC_JOB_ENDPOINT
+      console.log("Submitting job data:", JSON.stringify(jobData, null, 2))
+      console.log("Using endpoint:", endpoint)
 
-    // Here you would typically send the data to your API endpoint
-    // Example: POST request with jobData
+      if (!endpoint) {
+        throw new Error("JOB_ENDPOINT environment variable is not configured")
+      }
+
+      const response = await fetch(`${endpoint}/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jobData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(`HTTP ${response.status}: ${errorData}`)
+      }
+
+      const responseData = await response.json()
+
+      // Echo response to console
+      console.log("API Response:", JSON.stringify(responseData, null, 2))
+
+      if (responseData.statusCode != 200) {
+        toast.error("Job submission failed", {
+          description: responseData.body || "An error occurred while submitting the job.",
+          action: {
+            label: "Retry",
+            onClick: () => onSubmit(values),
+          },
+        })
+      } else {
+        // Show success toast
+        toast.success("Job submitted successfully!", {
+          description: `Job "${values.job_name}" has been created`,
+          action: {
+            label: "View Console",
+            onClick: () => console.log("Response data:", responseData),
+          },
+        })
+        form.reset()
+      }
+    } catch (error) {
+      console.error("API Error:", error)
+
+      // Show error toast
+      toast.error("Failed to submit job", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        action: {
+          label: "Retry",
+          onClick: () => onSubmit(values),
+        },
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -118,8 +179,8 @@ export function JobConfigForm() {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full">
-            Submit Job
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Submitting..." : "Submit Job"}
           </Button>
         </form>
       </Form>
