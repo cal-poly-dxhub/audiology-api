@@ -78,9 +78,22 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
           wsRef.current.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data)
-              addMessage(data.type || 'info', data.message || event.data)
+              // Format the message with proper JSON indentation if it's an object
+              let formattedMessage = data.message || event.data
+              if (typeof formattedMessage === 'object') {
+                formattedMessage = JSON.stringify(formattedMessage, null, 2)
+              }
+              addMessage(data.type || 'info', formattedMessage)
             } catch (error) {
-              addMessage('info', event.data)
+              // If it's not valid JSON, try to parse and format the raw data
+              try {
+                const parsedData = JSON.parse(event.data)
+                const formattedData = JSON.stringify(parsedData, null, 2)
+                addMessage('info', formattedData)
+              } catch (parseError) {
+                // If it's not JSON at all, display as-is
+                addMessage('info', event.data)
+              }
             }
           }
 
@@ -201,7 +214,7 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
                       {msg.type}
                     </Badge>
                   </div>
-                  <p className={getMessageTypeColor(msg.type)}>{msg.message}</p>
+                  <p className={`${getMessageTypeColor(msg.type)} whitespace-pre-wrap font-mono text-sm`}>{msg.message}</p>
                 </div>
               ))}
             </div>
