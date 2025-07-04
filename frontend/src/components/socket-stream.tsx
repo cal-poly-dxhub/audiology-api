@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 
 interface SocketStreamProps {
-  isJobSubmitted: boolean
+  isFileUploaded: boolean
   jobName?: string
 }
 
@@ -17,7 +17,7 @@ interface StreamMessage {
   message: string
 }
 
-export function SocketStream({ isJobSubmitted, jobName }: SocketStreamProps) {
+export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
   const [isConnected, setIsConnected] = useState(false)
   const [messages, setMessages] = useState<StreamMessage[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
@@ -25,8 +25,8 @@ export function SocketStream({ isJobSubmitted, jobName }: SocketStreamProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!isJobSubmitted) {
-      // Disconnect if job is not submitted
+    if (!isFileUploaded) {
+      // Disconnect if file is not uploaded
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
@@ -37,68 +37,83 @@ export function SocketStream({ isJobSubmitted, jobName }: SocketStreamProps) {
       return
     }
 
-    // Connect to WebSocket when job is submitted
-    const connectWebSocket = () => {
-      const wsUrl = process.env.NEXT_PUBLIC_WS_ENDPOINT
-      if (!wsUrl) {
-        console.error('WebSocket endpoint not configured')
-        setConnectionStatus('error')
-        return
-      }
-
-      setConnectionStatus('connecting')
-
-      try {
-        wsRef.current = new WebSocket(wsUrl)
-
-        wsRef.current.onopen = () => {
-          setIsConnected(true)
-          setConnectionStatus('connected')
-          addMessage('info', 'Connected to job stream')
-
-          // Send job name if available
-          if (jobName && wsRef.current) {
-            wsRef.current.send(JSON.stringify({ type: 'subscribe', jobName }))
-          }
-        }
-
-        wsRef.current.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            addMessage(data.type || 'info', data.message || event.data)
-          } catch (error) {
-            addMessage('info', event.data)
-          }
-        }
-
-        wsRef.current.onclose = () => {
-          setIsConnected(false)
-          setConnectionStatus('disconnected')
-          addMessage('warning', 'Connection closed')
-        }
-
-        wsRef.current.onerror = (error) => {
+    // Wait 1 second after file upload before connecting to WebSocket
+    const connectionTimer = setTimeout(() => {
+      // Connect to WebSocket when file is uploaded
+      const connectWebSocket = () => {
+        const wsUrl = process.env.NEXT_PUBLIC_WS_ENDPOINT
+        if (!wsUrl) {
+          console.error('WebSocket endpoint not configured')
           setConnectionStatus('error')
-          addMessage('error', 'WebSocket connection error')
-          console.error('WebSocket error:', error)
+          return
         }
-      } catch (error) {
-        setConnectionStatus('error')
-        addMessage('error', 'Failed to establish WebSocket connection')
-        console.error('WebSocket connection failed:', error)
+
+        setConnectionStatus('connecting')
+
+        try {
+          if (jobName) {
+            // For WebSocket connections, we need to pass headers via subprotocols or query params
+            // Since WebSocket headers are limited, we'll use query parameters
+            const wsUrlWithJobName = `${wsUrl}?jobName=${encodeURIComponent(jobName)}`
+            wsRef.current = new WebSocket(wsUrlWithJobName)
+          } else {
+            wsRef.current = new WebSocket(wsUrl)
+          }
+
+          wsRef.current.onopen = () => {
+            setIsConnected(true)
+            setConnectionStatus('connected')
+            addMessage('info', 'Connected to processing stream')
+
+            // Send job name immediately upon connection
+            if (jobName && wsRef.current) {
+              wsRef.current.send(JSON.stringify({
+                type: 'subscribe',
+                jobName: jobName,
+              }))
+              addMessage('info', `Monitoring job: ${jobName}`)
+            }
+          }
+
+          wsRef.current.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+              addMessage(data.type || 'info', data.message || event.data)
+            } catch (error) {
+              addMessage('info', event.data)
+            }
+          }
+
+          wsRef.current.onclose = () => {
+            setIsConnected(false)
+            setConnectionStatus('disconnected')
+            addMessage('warning', 'Connection closed')
+          }
+
+          wsRef.current.onerror = (error) => {
+            setConnectionStatus('error')
+            addMessage('error', 'WebSocket connection error')
+            console.error('WebSocket error:', error)
+          }
+        } catch (error) {
+          setConnectionStatus('error')
+          addMessage('error', 'Failed to establish WebSocket connection')
+          console.error('WebSocket connection failed:', error)
+        }
       }
-    }
 
-    connectWebSocket()
+      connectWebSocket()
+    }, 1000) // 1 second delay
 
-    // Cleanup on unmount
+    // Cleanup on unmount or dependency change
     return () => {
+      clearTimeout(connectionTimer)
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
       }
     }
-  }, [isJobSubmitted, jobName])
+  }, [isFileUploaded, jobName])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -148,10 +163,10 @@ export function SocketStream({ isJobSubmitted, jobName }: SocketStreamProps) {
   }
 
   return (
-    <Card className={`h-full ${!isJobSubmitted ? 'opacity-50 pointer-events-none' : ''}`}>
+    <Card className={`h-full ${!isFileUploaded ? 'opacity-50 pointer-events-none' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Job Stream</CardTitle>
+          <CardTitle className="text-lg">Processing Stream</CardTitle>
           <Badge variant={getStatusBadgeVariant()}>
             {getStatusText()}
           </Badge>
@@ -161,18 +176,18 @@ export function SocketStream({ isJobSubmitted, jobName }: SocketStreamProps) {
         )}
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="h-96 px-4 pb-4" ref={scrollAreaRef}>
-          {!isJobSubmitted ? (
+        <ScrollArea className="h-128 px-4 pb-4" ref={scrollAreaRef}>
+          {!isFileUploaded ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               <p className="text-center">
-                Submit a job to start streaming<br />
+                Upload a file to start processing stream<br />
                 <span className="text-sm">Real-time updates will appear here</span>
               </p>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               <p className="text-center">
-                Waiting for job updates...<br />
+                Waiting for processing updates...<br />
                 <span className="text-sm">Messages will appear as they arrive</span>
               </p>
             </div>
