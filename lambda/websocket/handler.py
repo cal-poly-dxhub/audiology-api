@@ -7,11 +7,13 @@ dynamodb = boto3.client("dynamodb")
 job_table = os.getenv("JOB_TABLE", None)
 
 
-def handle_connect(connection_id: str, domain_name: str, headers: dict) -> dict:
+def handle_connect(
+    connection_id: str, domain_name: str, query_string_parameters: dict
+) -> dict:
     """
     Stores the connection ID in Dynamo, taking a Job-Name in headers.
     """
-    job_name = headers.get("Job-Name")
+    job_name = query_string_parameters.get("jobName")
 
     if not job_table:
         return {
@@ -22,7 +24,7 @@ def handle_connect(connection_id: str, domain_name: str, headers: dict) -> dict:
     if not job_name:
         return {
             "statusCode": 400,
-            "body": "Job-Name header is required.",
+            "body": "jobName parameter is required.",
         }
 
     if not job_exists(job_name):
@@ -165,12 +167,13 @@ def handler(event, context):
     connection_id = event.get("requestContext", {}).get("connectionId")
     domain_name = event.get("requestContext", {}).get("domainName")
     stage = event.get("requestContext", {}).get("stage")
-    headers = event.get("headers", {})
+    query_string_parameters = event.get("queryStringParameters", {})
 
     print("Domain name:", domain_name)
     print("Stage:", stage)
     print("Connection ID:", connection_id)
     print(f"Route key: {route_key}")
+    print(f"Query string parameters: {query_string_parameters}")
 
     print(f"Received event: {json.dumps(event, indent=2)}")
     print("Got message")
@@ -179,7 +182,9 @@ def handler(event, context):
     match route_key:
         case "$connect":
             print("Handling connect route")
-            return_val = handle_connect(connection_id, domain_name, headers)
+            return_val = handle_connect(
+                connection_id, domain_name, query_string_parameters
+            )
 
         case "$disconnect":
             print("Handling disconnect route")
