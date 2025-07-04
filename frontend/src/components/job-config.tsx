@@ -284,7 +284,7 @@ export function JobConfigForm() {
         </div>
 
         {/* Socket Stream */}
-        <div className="bg-white rounded-lg shadow-md">
+        <div>
           <SocketStream
             isFileUploaded={isFileUploaded}
             jobName={submittedJobName}
