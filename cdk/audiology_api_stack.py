@@ -1,15 +1,52 @@
 from aws_cdk import RemovalPolicy, Stack, aws_s3 as s3
 from constructs import Construct
+from aws_cdk import CfnOutput
 from cdk.record_processing import RecordProcessing
 from cdk.submission_api import SubmissionApi
 from cdk.web_socket_api import WebSocketApi
 from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_cognito as cognito
 
 
 class AudiologyApiStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Create Cognito User Pool at the top of the stack
+        self.user_pool = cognito.UserPool(
+            self,
+            "AudiologyUserPool",
+            user_pool_name="audiology-user-pool",
+            self_sign_up_enabled=True,
+            sign_in_aliases=cognito.SignInAliases(email=True),
+            auto_verify=cognito.AutoVerifiedAttrs(email=True),
+            standard_attributes=cognito.StandardAttributes(
+                email=cognito.StandardAttribute(required=True, mutable=True)
+            ),
+            password_policy=cognito.PasswordPolicy(
+                min_length=8,
+                require_lowercase=True,
+                require_uppercase=True,
+                require_digits=True,
+                require_symbols=True,
+            ),
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        # Create User Pool Client
+        self.user_pool_client = cognito.UserPoolClient(
+            self,
+            "AudiologyUserPoolClient",
+            user_pool=self.user_pool,
+            user_pool_client_name="audiology-client",
+            auth_flows=cognito.AuthFlow(
+                user_password=True, user_srp=True, admin_user_password=True
+            ),
+            generate_secret=False,
+            prevent_user_existence_errors=True,
+        )
 
         self.audiology_table = dynamodb.Table(
             self,
@@ -88,4 +125,20 @@ class AudiologyApiStack(Stack):
             step_function=self.record_processing.step_function,
             config_table=self.config_table,
             bucket=self.bucket,
+            user_pool=self.user_pool,
+            user_pool_client=self.user_pool_client,
+        )
+
+        CfnOutput(
+            self,
+            "UserPoolId",
+            value=self.user_pool.user_pool_id,
+            description="Cognito User Pool ID",
+        )
+
+        CfnOutput(
+            self,
+            "UserPoolClientId",
+            value=self.user_pool_client.user_pool_client_id,
+            description="Cognito User Pool Client ID",
         )

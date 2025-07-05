@@ -13,6 +13,7 @@ from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_stepfunctions as stepfunctions
 from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_cognito as cognito
 
 
 POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSLambdaPowertoolsPythonV3-python39-x86_64:18"
@@ -27,6 +28,8 @@ class SubmissionApi(Construct):
         step_function: stepfunctions.StateMachine,
         config_table: dynamodb.Table,
         bucket: s3.Bucket,
+        user_pool: cognito.UserPool,
+        user_pool_client: cognito.UserPoolClient,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -138,9 +141,23 @@ class SubmissionApi(Construct):
             "ApiAuthorizerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="handler.handler",
-            code=_lambda.Code.from_asset("lambda/authorizer"),
+            code=_lambda.Code.from_asset(
+                "lambda/authorizer",
+                bundling={
+                    "image": _lambda.Runtime.PYTHON_3_13.bundling_image,
+                    "command": [
+                        "bash",
+                        "-c",
+                        "pip install --platform manylinux2014_x86_64 --only-binary=:all: -r requirements.txt -t /asset-output && cp -au . /asset-output",
+                    ],
+                },
+            ),
             timeout=Duration.seconds(10),
             memory_size=256,
+            environment={
+                "USER_POOL_ID": user_pool.user_pool_id,
+                "USER_POOL_CLIENT_ID": user_pool_client.user_pool_client_id,
+            },
         )
 
         # Grant the authorizer function permission to read the secret
@@ -160,7 +177,11 @@ class SubmissionApi(Construct):
             self,
             "ApiAuthorizer",
             handler=self.authorizer_function,
-            identity_sources=[apigateway.IdentitySource.header("X-API-Key")],
+            identity_sources=[
+                # Technically required for both JWT and API key authorizers but can be set
+                # to a placeholder for JWT auth.
+                apigateway.IdentitySource.header("X-API-Key"),
+            ],
             results_cache_ttl=Duration.minutes(5),
         )
 
