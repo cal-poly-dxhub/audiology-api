@@ -11,6 +11,8 @@ from aws_cdk import aws_s3_notifications as s3n
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_stepfunctions as stepfunctions
+from aws_cdk import aws_secretsmanager as secretsmanager
+from aws_cdk import aws_iam as iam
 
 
 POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSLambdaPowertoolsPythonV3-python39-x86_64:18"
@@ -117,34 +119,56 @@ class SubmissionApi(Construct):
             allow_credentials=False,
         )
 
+        # Create Secrets Manager secret to store API keys
+        self.api_keys_secret = secretsmanager.Secret(
+            self,
+            "ApiKeysSecret",
+            secret_name="audiology-api/api-keys",
+            description="API keys for Audiology API",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template='{"api_keys": []}',
+                generate_string_key="placeholder",
+                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\",
+            ),
+        )
+
+        # Create Lambda authorizer function
+        self.authorizer_function = _lambda.Function(
+            self,
+            "ApiAuthorizerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="handler.handler",
+            code=_lambda.Code.from_asset("lambda/authorizer"),
+            timeout=Duration.seconds(10),
+            memory_size=256,
+        )
+
+        # Grant the authorizer function permission to read the secret
+        self.api_keys_secret.grant_read(self.authorizer_function)
+
+        # Create the API Gateway
         self.api = apigateway.RestApi(
             self,
             "AudiologyApi",
             rest_api_name="Audiology API",
             description="File upload and job update API for the Audiology project.",
             default_cors_preflight_options=cors_options,
-            api_key_source_type=apigw.ApiKeySourceType.HEADER,
         )
 
-        api_key = self.api.add_api_key(
-            "ApiKey",
-            api_key_name="AudiologyDemoApiKey",
+        # Create the lambda authorizer
+        self.authorizer = apigateway.RequestAuthorizer(
+            self,
+            "ApiAuthorizer",
+            handler=self.authorizer_function,
+            identity_sources=[apigateway.IdentitySource.header("X-API-Key")],
+            results_cache_ttl=Duration.minutes(5),
         )
-
-        usage_plan = self.api.add_usage_plan(
-            "UsagePlan",
-            name="AudiologyApiUsagePlan",
-            throttle=apigw.ThrottleSettings(rate_limit=10, burst_limit=2),
-            quota=apigw.QuotaSettings(limit=1000, period=apigw.Period.DAY),
-        )
-        usage_plan.add_api_key(api_key)
-        usage_plan.add_api_stage(stage=self.api.deployment_stage)
 
         upload_resource = self.api.root.add_resource("upload")
         upload_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.api_handler),
-            api_key_required=True,
+            authorizer=self.authorizer,
             # TODO: possibly define responses with method_responses
         )
 
@@ -152,5 +176,5 @@ class SubmissionApi(Construct):
         upload_config_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.api_handler),
-            api_key_required=True,
+            authorizer=self.authorizer,
         )
