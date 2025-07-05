@@ -5,6 +5,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_s3_notifications as s3n
 from aws_cdk import aws_dynamodb as dynamodb
@@ -122,12 +123,28 @@ class SubmissionApi(Construct):
             rest_api_name="Audiology API",
             description="File upload and job update API for the Audiology project.",
             default_cors_preflight_options=cors_options,
+            api_key_source_type=apigw.ApiKeySourceType.HEADER,
         )
+
+        api_key = self.api.add_api_key(
+            "ApiKey",
+            api_key_name="AudiologyDemoApiKey",
+        )
+
+        usage_plan = self.api.add_usage_plan(
+            "UsagePlan",
+            name="AudiologyApiUsagePlan",
+            throttle=apigw.ThrottleSettings(rate_limit=10, burst_limit=2),
+            quota=apigw.QuotaSettings(limit=1000, period=apigw.Period.DAY),
+        )
+        usage_plan.add_api_key(api_key)
+        usage_plan.add_api_stage(stage=self.api.deployment_stage)
 
         upload_resource = self.api.root.add_resource("upload")
         upload_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.api_handler),
+            api_key_required=True,
             # TODO: possibly define responses with method_responses
         )
 
@@ -135,4 +152,5 @@ class SubmissionApi(Construct):
         upload_config_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.api_handler),
+            api_key_required=True,
         )
