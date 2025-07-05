@@ -63,36 +63,30 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
           wsRef.current.onopen = () => {
             setIsConnected(true)
             setConnectionStatus('connected')
-            addMessage('info', 'Connected to processing stream')
-
-            // Send job name immediately upon connection
-            if (jobName && wsRef.current) {
-              wsRef.current.send(JSON.stringify({
-                type: 'subscribe',
-                jobName: jobName,
-              }))
-              addMessage('info', `Monitoring job: ${jobName}`)
-            }
+            addMessage('info', `Connected to processing stream. Monitoring job ${jobName}.`)
           }
 
           wsRef.current.onmessage = (event) => {
             try {
-              const data = JSON.parse(event.data)
-              // Format the message with proper JSON indentation if it's an object
-              let formattedMessage = data.message || event.data
-              if (typeof formattedMessage === 'object') {
-                formattedMessage = JSON.stringify(formattedMessage, null, 2)
+              let parsedData = JSON.parse(event.data)
+              let messageType: StreamMessage['type'] = 'info'
+
+              if ("error" in parsedData) {
+                messageType = 'error'
+                parsedData = parsedData.error
+              } else if ("output" in parsedData) {
+                messageType = 'success'
+                parsedData = parsedData.output
               }
-              addMessage(data.type || 'info', formattedMessage)
+
+              const formattedData = JSON.stringify(parsedData, null, 2)
+              addMessage(messageType, formattedData)
             } catch (error) {
-              // If it's not valid JSON, try to parse and format the raw data
-              try {
-                const parsedData = JSON.parse(event.data)
-                const formattedData = JSON.stringify(parsedData, null, 2)
-                addMessage('info', formattedData)
-              } catch (parseError) {
-                // If it's not JSON at all, display as-is
+              if (error instanceof SyntaxError) {
                 addMessage('info', event.data)
+              } else {
+                console.error("Error occurred when receiving WebSocket message:", error)
+                addMessage('error', 'Unexpected error while decoding server message.')
               }
             }
           }
