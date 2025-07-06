@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { toast } from "sonner"
 import { useState, useRef } from "react"
+import { useSession, signOut } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -35,12 +36,17 @@ const formSchema = z.object({
 })
 
 export function JobConfigForm() {
+  const { data: session, status } = useSession()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadUrl, setUploadUrl] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isFileUploaded, setIsFileUploaded] = useState(false)
   const [submittedJobName, setSubmittedJobName] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  if (!session && status !== "loading") {
+    signOut({ callbackUrl: '/auth/signin' })
+  }
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -76,6 +82,8 @@ export function JobConfigForm() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.accessToken || ''}`,
+          "X-API-Key": "placeholder" // Superseded by Authorization header
         },
         body: JSON.stringify(jobData),
       })
@@ -122,6 +130,17 @@ export function JobConfigForm() {
       }
     } catch (error) {
       console.error("API Error:", error)
+
+      // If this is a 401 or a 403, simply ask the user to sign out.
+      if (error instanceof Error && (error.message.includes("401") || error.message.includes("403"))) {
+        toast.error("Session expired. Please sign in again.", {
+          action: {
+            label: "Sign In",
+            onClick: () => signOut({ callbackUrl: '/auth/signin' }),
+          },
+        })
+        return
+      }
 
       // Show error toast
       toast.error("Failed to submit job", {
@@ -190,6 +209,25 @@ export function JobConfigForm() {
 
   return (
     <div className="max-w-7xl mx-auto mt-8 p-6">
+      {/* Sign-out section */}
+      {session && (
+        <div className="mb-6 flex justify-end">
+          <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4">
+            <span className="text-sm text-gray-600">
+              Signed in as <span className="font-medium">{session.user?.email}</span>
+            </span>
+            <Button
+              onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Main Form */}
         <div className="bg-white rounded-lg shadow-md p-6">
