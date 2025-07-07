@@ -8,8 +8,10 @@ import boto3
 from datetime import datetime
 import os
 import json
-
 from botocore.utils import ClientError
+import sys
+
+sys.path.append("/opt/python")  # For lambda layers
 
 # Configure CORS options
 cors_config = CORSConfig(

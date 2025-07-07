@@ -5,6 +5,9 @@ import os
 import jwt
 import requests
 from typing import Dict, Any, Optional
+import sys
+
+sys.path.append("/opt/python")  # For lambda layers
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

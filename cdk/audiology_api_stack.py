@@ -6,12 +6,21 @@ from cdk.submission_api import SubmissionApi
 from cdk.web_socket_api import WebSocketApi
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_lambda as _lambda
 
 
 class AudiologyApiStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        self.error_layer = _lambda.LayerVersion(
+            self,
+            "AudiologyErrorLayer",
+            code=_lambda.Code.from_asset("lambda/layers/audiology_errors"),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_13],
+            description="Layer for Audiology API error handling",
+        )
 
         # Create Cognito User Pool at the top of the stack
         self.user_pool = cognito.UserPool(
@@ -106,6 +115,7 @@ class AudiologyApiStack(Stack):
             self,
             "WebSocketApi",
             job_table=self.audiology_table,
+            error_layer=self.error_layer,
         )
 
         self.record_processing = RecordProcessing(
@@ -116,6 +126,7 @@ class AudiologyApiStack(Stack):
             config_table=self.config_table,
             bucket=self.bucket,
             output_bucket=self.output_bucket,
+            error_layer=self.error_layer,
         )
 
         self.submission_api = SubmissionApi(
@@ -127,6 +138,7 @@ class AudiologyApiStack(Stack):
             bucket=self.bucket,
             user_pool=self.user_pool,
             user_pool_client=self.user_pool_client,
+            error_layer=self.error_layer,
         )
 
         CfnOutput(

@@ -21,6 +21,7 @@ class WebSocketApi(Construct):
         scope: Construct,
         construct_id: str,
         job_table: dynamodb.Table,
+        error_layer: _lambda.LayerVersion,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -50,6 +51,7 @@ class WebSocketApi(Construct):
             environment={
                 "JOB_TABLE": job_table.table_name,
             },
+            layers=[error_layer],
         )
 
         job_table.grant_read_write_data(websocket_handler)

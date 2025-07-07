@@ -3,6 +3,9 @@ import logging
 import os
 import boto3
 import uuid
+import sys
+
+sys.path.append("/opt/python")  # For lambda layers
 
 from botocore.utils import ClientError
 

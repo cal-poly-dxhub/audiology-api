@@ -21,6 +21,7 @@ class RecordProcessing(Construct):
         config_table: dynamodb.Table,
         bucket: s3.Bucket,
         output_bucket: s3.Bucket,
+        error_layer: _lambda.LayerVersion,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -71,6 +72,7 @@ class RecordProcessing(Construct):
                 "INFERENCE_PROFILE_ARN": main_inference_profile,
                 "BUCKET_NAME": bucket.bucket_name,
             },
+            layers=[error_layer],
         )
 
         job_table.grant_read_write_data(record_processor_lambda)
@@ -105,6 +107,7 @@ class RecordProcessing(Construct):
                 "JOB_TABLE": job_table.table_name,
                 "OUTPUT_BUCKET_NAME": output_bucket.bucket_name,
             },
+            layers=[error_layer],
         )
 
         job_table.grant_read_write_data(record_processor_lambda)

@@ -5,6 +5,9 @@ import botocore
 import boto3
 import json
 import logging
+import sys
+
+sys.path.append("/opt/python")  # For lambda layers
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

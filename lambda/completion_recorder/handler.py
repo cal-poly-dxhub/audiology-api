@@ -1,6 +1,9 @@
 import boto3
 import os
 import json
+import sys
+
+sys.path.append("/opt/python")  # For lambda layers
 
 job_table = os.getenv("JOB_TABLE", None)
 dynamodb = boto3.client("dynamodb")

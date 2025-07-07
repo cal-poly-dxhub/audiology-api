@@ -31,6 +31,7 @@ class SubmissionApi(Construct):
         bucket: s3.Bucket,
         user_pool: cognito.UserPool,
         user_pool_client: cognito.UserPoolClient,
+        error_layer: _lambda.LayerVersion,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -58,6 +59,7 @@ class SubmissionApi(Construct):
                 "JOB_TABLE": job_table.table_name,
                 "STEP_FUNCTION_ARN": step_function.state_machine_arn,
             },
+            layers=[error_layer],
         )
 
         bucket.grant_read(bucket_response)
@@ -102,7 +104,7 @@ class SubmissionApi(Construct):
                 "JOB_TABLE": job_table.table_name,
                 "CONFIG_TABLE_NAME": config_table.table_name,
             },
-            layers=[self.powertools_layer],
+            layers=[self.powertools_layer, error_layer],
         )
 
         config_table.grant_read_write_data(self.api_handler)
@@ -160,6 +162,7 @@ class SubmissionApi(Construct):
                 "USER_POOL_ID": user_pool.user_pool_id,
                 "USER_POOL_CLIENT_ID": user_pool_client.user_pool_client_id,
             },
+            layers=[error_layer],
         )
 
         # Grant the authorizer function permission to read the secret
