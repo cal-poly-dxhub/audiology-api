@@ -154,3 +154,10 @@ class AudiologyApiStack(Stack):
             value=self.user_pool_client.user_pool_client_id,
             description="Cognito User Pool Client ID",
         )
+
+        CfnOutput(
+            self,
+            "ApiKeysSecretName",
+            value=self.submission_api.api_keys_secret.secret_name,
+            description="Name of the Secrets Manager secret containing API keys",
+        )

@@ -95,11 +95,13 @@ def validate_api_key(api_key: str) -> bool:
     Returns:
         bool: True if valid, False otherwise
     """
-    try:
-        # Get the secret containing valid API keys
-        secret_name = "audiology-api/api-keys"
+    SECRET_NAME = os.environ.get("API_KEYS_SECRET_NAME")
+    if not SECRET_NAME:
+        logger.error("API_KEYS_SECRET_NAME environment variable is not set")
+        return False
 
-        response = secrets_client.get_secret_value(SecretId=secret_name)
+    try:
+        response = secrets_client.get_secret_value(SecretId=SECRET_NAME)
         secret_data = json.loads(response["SecretString"])
 
         # Check if the provided API key exists in the valid keys

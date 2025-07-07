@@ -127,10 +127,11 @@ class SubmissionApi(Construct):
 
         # Create Secrets Manager secret to store API keys
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        self.secret_name = f"audiology-api/api-keys-{timestamp}"
         self.api_keys_secret = secretsmanager.Secret(
             self,
             "ApiKeysSecret",
-            secret_name=f"audiology-api/api-keys-{timestamp}",
+            secret_name=self.secret_name,
             description="API keys for Audiology API",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template='{"api_keys": []}',
@@ -161,6 +162,7 @@ class SubmissionApi(Construct):
             environment={
                 "USER_POOL_ID": user_pool.user_pool_id,
                 "USER_POOL_CLIENT_ID": user_pool_client.user_pool_client_id,
+                "API_KEYS_SECRET_NAME": self.api_keys_secret.secret_name,
             },
             layers=[error_layer],
         )
