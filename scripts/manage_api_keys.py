@@ -84,7 +84,7 @@ def remove_api_key(secret_name: str, api_key: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description='Manage API keys for Audiology API')
-    parser.add_argument('--secret-name', default='audiology-api/api-keys', 
+    parser.add_argument('--secret-name', required=True, 
                        help='Name of the secret in Secrets Manager')
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -118,3 +118,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

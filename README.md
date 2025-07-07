@@ -38,6 +38,12 @@ This project is deployed on AWS using the Cloud Development Kit (CDK). The deplo
 
 - Check that your account has enabled necessary Bedrock models. You can do this by following the steps under "Request access to an Amazon Bedrock foundation model" [here](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html#getting-started-model-access) for Nova Pro. This step may not be necessary.
 
+- After completing deployment, use the API key configuration script to create an API key for calls. Use `ApiKeysSecretName` from the CloudFormation output:
+
+  ```bash
+  python scripts/manage_api_key.py add --secret-name <value of ApiKeysSecretName>
+  ```
+
 ## Local Frontend Deployment
 
 This project is not configured to deploy a frontend on AWS yet. However, you can run the local frontend development server by following these steps:
