@@ -19,7 +19,7 @@ class AudiologyApiStack(Stack):
             "AudiologyUserPool",
             user_pool_name="audiology-user-pool",
             self_sign_up_enabled=True,
-            sign_in_aliases=cognito.SignInAliases(email=True),
+            sign_in_aliases=cognito.SignInAliases(email=True, username=False),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),
             standard_attributes=cognito.StandardAttributes(
                 email=cognito.StandardAttribute(required=True, mutable=True)
