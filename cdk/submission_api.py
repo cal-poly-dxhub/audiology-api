@@ -14,6 +14,7 @@ from aws_cdk import aws_stepfunctions as stepfunctions
 from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_cognito as cognito
+from datetime import datetime
 
 
 POWERTOOLS_LAYER_VERSION_ARN = "arn:aws:lambda:us-west-2:017000801446:layer:AWSLambdaPowertoolsPythonV3-python39-x86_64:18"
@@ -123,10 +124,11 @@ class SubmissionApi(Construct):
         )
 
         # Create Secrets Manager secret to store API keys
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         self.api_keys_secret = secretsmanager.Secret(
             self,
             "ApiKeysSecret",
-            secret_name="audiology-api/api-keys",
+            secret_name=f"audiology-api/api-keys-{timestamp}",
             description="API keys for Audiology API",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template='{"api_keys": []}',

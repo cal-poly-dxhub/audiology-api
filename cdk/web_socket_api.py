@@ -10,7 +10,9 @@ from aws_cdk import (
     aws_logs as logs,
     aws_iam as iam,
 )
+
 from constructs import Construct
+from datetime import datetime
 
 
 class WebSocketApi(Construct):
@@ -27,10 +29,11 @@ class WebSocketApi(Construct):
         self.account = Stack.of(self).account
 
         # Create log groups first
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         access_log_group = logs.LogGroup(
             self,
             "WebSocketApiAccessLogs",
-            log_group_name=f"/aws/apigateway/websocket/{construct_id}/access",
+            log_group_name=f"/aws/apigateway/websocket/{construct_id}/access_{timestamp}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY,
         )
