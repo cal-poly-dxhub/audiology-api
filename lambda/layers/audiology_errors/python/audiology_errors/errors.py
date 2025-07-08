@@ -16,7 +16,7 @@ class AudiologyAPIError(Exception):
 class InternalServerError(AudiologyAPIError):
     """For server-side violated invariants--e.g., env variables not set."""
 
-    def __init__(self):
+    def __init__(self, message: str = "Internal server error."):
         super().__init__(message, 500)
         self.timestamp = datetime.datetime.utcnow().isoformat()
         logger.error(f"Internal Server Error at {self.timestamp}")

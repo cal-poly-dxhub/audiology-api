@@ -55,7 +55,7 @@ def create_dynamo_job(
         job_exists = "Item" in response
     except ClientError as e:
         logger.error(f"Error checking job existence in DynamoDB: {e}")
-        raise InternalServerError(f"Error checking job existence: {str(e)}") from e
+        raise InternalServerError(f"Error checking job existence.") from e
 
     if job_exists:
         raise ValidationError(
@@ -75,7 +75,7 @@ def create_dynamo_job(
         )
     except ClientError as e:
         logger.error(f"Error creating job in job table: {e}")
-        raise InternalServerError(f"Error creating job in DynamoDB: {str(e)}") from e
+        raise InternalServerError(f"Error creating job in DynamoDB.") from e
 
 
 def generate_presigned_url(bucket_name, file_key, mime_type) -> str:
@@ -181,7 +181,9 @@ def store_or_update_config(
         )
     except ClientError as e:
         logger.error(f"Error checking config existence in DynamoDB: {e}", exc_info=True)
-        raise InternalServerError(f"Error checking config existence: {str(e)}") from e
+        raise InternalServerError(
+            f"Error checking config existence. Does the config exist?"
+        ) from e
 
     item_exists = "Item" in response
 
@@ -189,7 +191,7 @@ def store_or_update_config(
         dynamodb.put_item(TableName=CONFIG_TABLE_NAME, Item=item)
     except ClientError as e:
         logger.error(f"Error storing config in DynamoDB: {e}", exc_info=True)
-        raise InternalServerError(f"Error storing config in DynamoDB: {str(e)}") from e
+        raise InternalServerError(f"Error storing config in DynamoDB.") from e
 
     return "updated" if item_exists else "created"
 
@@ -234,7 +236,7 @@ def validate_env() -> None:
     required_env_vars = ["JOB_TABLE", "BUCKET_NAME", "CONFIG_TABLE_NAME"]
     missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
     if missing_vars:
-        raise InternalServerError(f"Internal server error")
+        raise InternalServerError()
 
 
 def validate_upload_config(json_body: dict) -> None:
