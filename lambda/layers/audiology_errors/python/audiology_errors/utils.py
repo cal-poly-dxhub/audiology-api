@@ -1,7 +1,8 @@
 from audiology_errors.errors import (
     AudiologyAPIError,
-    ExternalServiceError,
+    InternalServerError,
 )
+
 from datetime import datetime
 from functools import wraps
 from botocore.exceptions import ClientError
@@ -43,17 +44,17 @@ def handle_errors(func):
         except AudiologyAPIError as e:
             logger.error(
                 f"API Error in {func.__name__}: {e.message}",
-                extra={"error_code": e.error_code, "status_code": e.status_code},
+                exc_info=True,
             )
             return create_error_response(e)
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             logger.error(
                 f"AWS Client Error in {func.__name__}: {error_code}",
-                extra={"aws_error": str(e)},
+                exc_info=True,
             )
-            aws_error = ExternalServiceError("AWS", f"Service error: {error_code}")
-            return create_error_response(aws_error)
+            error = InternalServerError("An unexpected error occurred.")
+            return create_error_response(error)
         except Exception as e:
             logger.error(
                 f"Unexpected error in {func.__name__}: {str(e)}", exc_info=True

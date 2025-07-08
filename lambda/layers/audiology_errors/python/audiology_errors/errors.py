@@ -13,24 +13,18 @@ class AudiologyAPIError(Exception):
         self.status_code = status_code
 
 
+class InternalServerError(AudiologyAPIError):
+    """For server-side violated invariants--e.g., env variables not set."""
+
+    def __init__(self):
+        super().__init__(message, 500)
+        self.timestamp = datetime.datetime.utcnow().isoformat()
+        logger.error(f"Internal Server Error at {self.timestamp}")
+
+
 class ValidationError(AudiologyAPIError):
+    """For invalid requests--e.g., missing required fields or invalid data types."""
+
     def __init__(self, message: str, field: str = None):
         super().__init__(message, 400, "VALIDATION_ERROR")
         self.field = field
-
-
-class ResourceNotFoundError(AudiologyAPIError):
-    def __init__(self, resource: str, identifier: str):
-        super().__init__(
-            f"{resource} '{identifier}' not found", 404, "RESOURCE_NOT_FOUND"
-        )
-
-
-class ResourceConflictError(AudiologyAPIError):
-    def __init__(self, message: str):
-        super().__init__(message, 409, "RESOURCE_CONFLICT")
-
-
-class ExternalServiceError(AudiologyAPIError):
-    def __init__(self, service: str, message: str):
-        super().__init__(f"{service} error: {message}", 502, "EXTERNAL_SERVICE_ERROR")
