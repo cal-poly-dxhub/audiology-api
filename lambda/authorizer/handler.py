@@ -7,6 +7,8 @@ import requests
 from typing import Dict, Any, Optional
 import sys
 
+from audiology_errors.errors import ValidationError, InternalServerError
+
 sys.path.append("/opt/python")  # For lambda layers
 
 logger = logging.getLogger()
@@ -14,12 +16,33 @@ logger.setLevel(logging.INFO)
 
 secrets_client = boto3.client("secretsmanager")
 
-# Cognito configuration from environment variables
+# Environment variables
 USER_POOL_ID = os.environ.get("USER_POOL_ID")
 USER_POOL_CLIENT_ID = os.environ.get("USER_POOL_CLIENT_ID")
+API_KEYS_SECRET_NAME = os.environ.get("API_KEYS_SECRET_NAME")
 
 # Cache for Cognito public keys
 _cognito_keys_cache = None
+
+
+def validate_environment() -> None:
+    """
+    Validate that all required environment variables are set.
+
+    Raises:
+        InternalServerError: If any required environment variable is missing
+    """
+    required_env_vars = ["USER_POOL_ID", "USER_POOL_CLIENT_ID", "API_KEYS_SECRET_NAME"]
+
+    missing_vars = []
+    for var in required_env_vars:
+        if not os.environ.get(var):
+            missing_vars.append(var)
+
+    if missing_vars:
+        missing_vars_str = ", ".join(missing_vars)
+        logger.error(f"Missing required environment variables: {missing_vars_str}")
+        raise InternalServerError()
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -40,6 +63,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ...
     }
     """
+
+    validate_environment()
+
     try:
         headers = event.get("headers", {})
 
@@ -95,13 +121,9 @@ def validate_api_key(api_key: str) -> bool:
     Returns:
         bool: True if valid, False otherwise
     """
-    SECRET_NAME = os.environ.get("API_KEYS_SECRET_NAME")
-    if not SECRET_NAME:
-        logger.error("API_KEYS_SECRET_NAME environment variable is not set")
-        return False
 
     try:
-        response = secrets_client.get_secret_value(SecretId=SECRET_NAME)
+        response = secrets_client.get_secret_value(SecretId=API_KEYS_SECRET_NAME)
         secret_data = json.loads(response["SecretString"])
 
         # Check if the provided API key exists in the valid keys
@@ -125,10 +147,6 @@ def validate_jwt_token(token: str) -> Optional[Dict[str, Any]]:
         Dict containing user information if valid, None otherwise
     """
     try:
-        if not USER_POOL_ID or not USER_POOL_CLIENT_ID:
-            logger.error("Cognito configuration not found in environment variables")
-            return None
-
         # Get Cognito public keys
         public_keys = get_cognito_public_keys()
         if not public_keys:
