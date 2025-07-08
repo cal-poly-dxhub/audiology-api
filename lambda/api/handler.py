@@ -10,17 +10,19 @@ import os
 import json
 from botocore.utils import ClientError
 import sys
+import logging
+
+from audiology_errors.errors import ValidationError, InternalServerError
+from audiology_errors.utils import handle_errors
 
 sys.path.append("/opt/python")  # For lambda layers
 
-# Configure CORS options
 cors_config = CORSConfig(
     allow_origin="*",  # or "*" for all origins
     allow_headers=["Content-Type", "Authorization"],
     expose_headers=["X-Custom-Header"],
     max_age=3600,
 )
-
 resolver = ApiGatewayResolver(cors=cors_config)
 tracer = Tracer(service="audiology-api-lambda")
 logger = Logger(service="audiology-api-lambda")
@@ -29,24 +31,7 @@ s3 = boto3.client("s3")
 dynamodb = boto3.client("dynamodb")
 
 JOB_TABLE = os.environ.get("JOB_TABLE", None)
-
-
-def job_exists(job_name: str) -> bool:
-    """
-    Checks if a job with the given name already exists in DynamoDB.
-    """
-
-    if JOB_TABLE is None:
-        raise ValueError("JOB_TABLE environment variable is not set.")
-
-    try:
-        response = dynamodb.get_item(
-            TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
-        )
-        return "Item" in response
-    except Exception as e:
-        raise ValueError(f"Error checking job existence: {str(e)}") from e
+CONFIG_TABLE_NAME = os.environ.get("CONFIG_TABLE_NAME", None)
 
 
 def create_dynamo_job(
@@ -54,17 +39,33 @@ def create_dynamo_job(
     config_id: str,
     institution_id: str,
 ) -> None:
+    """Create a new job in the DynamoDB job table.
 
-    job_table = os.environ.get("JOB_TABLE", None)
-    if job_table is None:
-        raise ValueError("JOB_TABLE environment variable is not set.")
+    Raises:
+        ValidationError: If the job name already exists in the job table.
+        InternalServerError: If there is an error creating the job in DynamoDB or checking job existence.
 
-    if job_exists(job_name):
-        raise ValueError(f"Job with name {job_name} already exists.")
+    """
+    job_exists = False
+    try:
+        response = dynamodb.get_item(
+            TableName=JOB_TABLE,
+            Key={"job_name": {"S": job_name}},
+        )
+        job_exists = "Item" in response
+    except ClientError as e:
+        logger.error(f"Error checking job existence in DynamoDB: {e}")
+        raise InternalServerError(f"Error checking job existence: {str(e)}") from e
+
+    if job_exists:
+        raise ValidationError(
+            f"Job with name '{job_name}' already exists.",
+            field="job_name",
+        )
 
     try:
         dynamodb.put_item(
-            TableName=job_table,
+            TableName=JOB_TABLE,
             Item={
                 "job_name": {"S": job_name},
                 "config_id": {"S": config_id},
@@ -73,30 +74,41 @@ def create_dynamo_job(
             },
         )
     except ClientError as e:
-        logger.error(f"Error creating job in DynamoDB: {e}")
-        raise ValueError(f"Error creating job in DynamoDB: {str(e)}") from e
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise ValueError(f"Unexpected error: {str(e)}") from e
+        logger.error(f"Error creating job in job table: {e}")
+        raise InternalServerError(f"Error creating job in DynamoDB: {str(e)}") from e
+
+
+def generate_presigned_url(bucket_name, file_key, mime_type) -> str:
+    """Generate a pre-signed URL for uploading a file to S3.
+
+    Raises:
+        InternalServerError: If there is an error generating the pre-signed URL.
+
+    """
+    try:
+        presigned_url = s3.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": bucket_name,
+                "Key": file_key,
+                "ContentType": mime_type,
+            },
+            ExpiresIn=3600,  # URL expires in 1 hour
+        )
+    except ClientError as e:
+        logger.error(f"Error generating pre-signed URL: {e}")
+        raise InternalServerError(
+            "Could not generate pre-signed URL for S3 upload."
+        ) from e
+
+    return presigned_url
 
 
 @resolver.post("/upload")
 @tracer.capture_method
 def upload_handler():
-    """
-    Handles file upload events by generating a pre-signed URL.
-    """
+    """Handle file upload events by generating a pre-signed URL."""
     logger.info("Received file upload event")
-
-    bucket_name = os.environ.get("BUCKET_NAME", None)
-
-    if bucket_name is None:
-        logger.error("BUCKET_NAME environment variable is not set")
-        return {
-            "statusCode": 500,
-            "body": "Internal Server Error: BUCKET_NAME not configured.",
-            "headers": {"Content-Type": "application/json"},
-        }
 
     supported_types = {
         "text/csv": {
@@ -109,88 +121,30 @@ def upload_handler():
 
     event = resolver.current_event
     json_body = event.json_body
-    job_name = json_body.get("job_name", None)
-    config_id = json_body.get("config_id", None)
-    institution_id = json_body.get("institution_id", None)
-    mime_type = json_body.get("mime_type", None)
 
-    if job_name is None:
-        logger.error("Filename is missing in the request")
-        return {
-            "statusCode": 400,
-            "body": "Bad Request: Filename is required.",
-            "headers": {"Content-Type": "application/json"},
-        }
+    validate_upload(json_body)
 
-    if institution_id is None:
-        logger.error("Institution ID is missing in the request")
-        return {
-            "statusCode": 400,
-            "body": "Bad Request: Institution ID is required.",
-            "headers": {"Content-Type": "application/json"},
-        }
-
-    if config_id is None:
-        logger.error("Config ID is missing in the request")
-        return {
-            "statusCode": 400,
-            "body": "Bad Request: Config ID is required.",
-            "headers": {"Content-Type": "application/json"},
-        }
-
-    if mime_type is None:
-        logger.error("MIME type is missing in the request")
-        return {
-            "statusCode": 400,
-            "body": "Bad Request: MIME type is required.",
-            "headers": {"Content-Type": "application/json"},
-        }
-
-    if mime_type not in supported_types:
-        logger.error(f"Unsupported file type: {mime_type}")
-        return {
-            "statusCode": 400,
-            "body": f"Bad Request: Unsupported file type '{mime_type}'. Supported types are {', '.join(supported_types.keys())}.",
-            "headers": {"Content-Type": "application/json"},
-        }
-
-    logger.debug(f"Job name: {job_name}")
+    job_name = json_body["job_name"]
+    config_id = json_body["config_id"]
+    institution_id = json_body["institution_id"]
+    mime_type = json_body["mime_type"]
     file_key = f"input_reports/{job_name}.{supported_types[mime_type]['extension']}"
 
-    # Generate a pre-signed URL for uploading the file
-    try:
-        presigned_url = s3.generate_presigned_url(
-            "put_object",
-            Params={
-                "Bucket": bucket_name,
-                "Key": file_key,
-                "ContentType": mime_type,
-            },
-            ExpiresIn=3600,  # URL expires in 1 hour
-        )
-    except Exception as e:
-        logger.error(f"Error generating pre-signed URL: {e}")
-        return {
-            "statusCode": 500,
-            "body": "Internal Server Error: Could not generate pre-signed URL.",
-            "headers": {"Content-Type": "application/json"},
-        }
+    logger.info("Job name: %s", job_name)
+
+    presigned_url = generate_presigned_url(
+        bucket_name=os.environ["BUCKET_NAME"],
+        file_key=file_key,
+        mime_type=mime_type,
+    )
 
     logger.info(f"Generated pre-signed URL: {presigned_url}")
 
-    try:
-        create_dynamo_job(
-            job_name=job_name,
-            config_id=config_id,
-            institution_id=institution_id,
-        )
-    except ValueError as e:
-        logger.error(f"Error creating job in DynamoDB: {e}")
-        return {
-            "statusCode": 500,
-            "body": f"Internal Server Error: {str(e)}",
-            "headers": {"Content-Type": "application/json"},
-        }
+    create_dynamo_job(
+        job_name=job_name,
+        config_id=config_id,
+        institution_id=institution_id,
+    )
 
     return {
         "statusCode": 200,
@@ -199,116 +153,126 @@ def upload_handler():
     }
 
 
+def store_or_update_config(
+    config_name: str,
+    config_data: dict,
+) -> str:
+    """Create or update a config in DynamoDB, returning the action taken.
+
+    Raises:
+        InternalServerError: If there is an error storing the config in DynamoDB.
+
+    """
+    timestamp = datetime.now().isoformat()
+
+    if not item_exists:
+        item["created_at"] = {"S": timestamp}
+
+    item = {
+        "config_id": {"S": config_name},
+        "config_data": {"S": json.dumps(config_data)},
+        "updated_at": {"S": timestamp},
+    }
+
+    try:
+        response = dynamodb.get_item(
+            TableName=CONFIG_TABLE_NAME,
+            Key={"config_id": {"S": config_name}},
+        )
+    except ClientError as e:
+        logger.error(f"Error checking config existence in DynamoDB: {e}", exc_info=True)
+        raise InternalServerError(f"Error checking config existence: {str(e)}") from e
+
+    item_exists = "Item" in response
+
+    try:
+        dynamodb.put_item(TableName=CONFIG_TABLE_NAME, Item=item)
+    except ClientError as e:
+        logger.error(f"Error storing config in DynamoDB: {e}", exc_info=True)
+        raise InternalServerError(f"Error storing config in DynamoDB: {str(e)}") from e
+
+    return "updated" if item_exists else "created"
+
+
 @resolver.post("/upload_config")
 @tracer.capture_method
 def upload_config_handler():
-    """
-    Handles config upload events by storing JSON data in DynamoDB.
-    """
+    """Handle config upload events by storing JSON data in DynamoDB."""
     logger.info("Received config upload event")
-
-    table_name = os.environ.get("CONFIG_TABLE_NAME", None)
-    if not table_name:
-        logger.error("CONFIG_TABLE_NAME environment variable is not set")
-        return {
-            "statusCode": 500,
-            "body": {
-                "error": "Internal Server Error: CONFIG_TABLE_NAME not configured."
-            },
-            "headers": {"Content-Type": "application/json"},
-        }
 
     event = resolver.current_event
     json_body = event.json_body
 
-    config_name = json_body.get("config_name", None)
-    config_data = json_body.get("config_data", None)
+    validate_upload_config(json_body)
 
-    if not config_name:
-        logger.error("config_name is missing in the request")
-        return {
-            "statusCode": 400,
-            "body": {"error": "Bad Request: config_name is required."},
-            "headers": {"Content-Type": "application/json"},
-        }
+    config_name = json_body["config_name"]
+    config_data = json_body["config_data"]
 
-    if not config_data:
-        logger.error("config_data is missing in the request")
-        return {
-            "statusCode": 400,
-            "body": {"error": "Bad Request: config_data is required."},
-            "headers": {"Content-Type": "application/json"},
-        }
+    config_exists = check_config_exists(config_name)
+    action = store_or_update_config(config_name, config_data)
 
-    logger.debug(f"Config name: {config_name}")
-
-    try:
-        # Check if item already exists
-        try:
-            response = dynamodb.get_item(
-                TableName=table_name, Key={"config_id": {"S": config_name}}
-            )
-            item_exists = "Item" in response
-        except ClientError as e:
-            logger.error(f"Error checking existing item: {e}")
-            return {
-                "statusCode": 500,
-                "body": {
-                    "error": "Internal Server Error: Could not check existing config."
-                },
-                "headers": {"Content-Type": "application/json"},
-            }
-
-        # Store or update the config
-        timestamp = datetime.now().isoformat()
-
-        item = {
-            "config_id": {"S": config_name},
-            "config_data": {"S": json.dumps(config_data)},
-            "updated_at": {"S": timestamp},
-        }
-
-        if not item_exists:
-            item["created_at"] = {"S": timestamp}
-
-        dynamodb.put_item(TableName=table_name, Item=item)
-
-        action = "updated" if item_exists else "created"
-        message = f"Config '{config_name}' successfully {action}."
-
-        logger.info(f"Config {action}: {config_name}")
-
-        return {
-            "statusCode": 200,
-            "body": {
-                "message": message,
-                "config_name": config_name,
-                "action": action,
-                "timestamp": timestamp,
-            },
-            "headers": {"Content-Type": "application/json"},
-        }
-
-    except ClientError as e:
-        logger.error(f"Error storing config in DynamoDB: {e}")
-        return {
-            "statusCode": 500,
-            "body": {"error": "Internal Server Error: Could not store config."},
-            "headers": {"Content-Type": "application/json"},
-        }
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return {
-            "statusCode": 500,
-            "body": {"error": "Internal Server Error: Unexpected error occurred."},
-            "headers": {"Content-Type": "application/json"},
-        }
+    message = f"Config '{config_name}' successfully {action}."
+    return {
+        "statusCode": 200,
+        "body": {
+            "message": message,
+            "config_name": config_name,
+            "action": action,
+            "timestamp": timestamp,
+        },
+        "headers": {"Content-Type": "application/json"},
+    }
 
 
+def validate_env() -> None:
+    """Validate that all required environment variables are set.
+
+    Raises:
+        InternalServerError: If any required environment variable is missing.
+
+    """
+    required_env_vars = ["JOB_TABLE", "BUCKET_NAME", "CONFIG_TABLE_NAME"]
+    missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+    if missing_vars:
+        raise InternalServerError(f"Internal server error")
+
+
+def validate_upload_config(json_body: dict) -> None:
+    """Validate the JSON body of the config upload request.
+
+    Raises:
+        ValidationError: If any required field is missing in the JSON body.
+
+    """
+    required_fields = ["config_name", "config_data"]
+
+    for field in required_fields:
+        if field not in json_body:
+            logger.error(f"Missing required field: {field}")
+            raise ValidationError(f"Missing required field: {field}", field=field)
+
+
+def validate_upload(json_body: dict) -> bool:
+    """Validate the JSON body of the upload request.
+
+    Raises:
+        ValidationError: If any required field is missing in the JSON body.
+
+    """
+    required_fields = ["job_name", "config_id", "institution_id", "mime_type"]
+
+    for field in required_fields:
+        if field not in json_body:
+            logger.error(f"Missing required field: {field}")
+            raise ValidationError(f"Missing required field: {field}", field=field)
+
+
+@handle_errors
 def handler(event: dict, context: LambdaContext) -> dict:
-    """
-    Handles API Gateway events.
-    """
+    """Handle API Gateway events."""
+    validate_env()
+
     response = resolver.resolve(event, context)
     logger.info(f"Response: {response}")
+
     return response
