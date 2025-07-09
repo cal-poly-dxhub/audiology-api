@@ -26,5 +26,5 @@ class ValidationError(AudiologyAPIError):
     """For invalid requests--e.g., missing required fields or invalid data types."""
 
     def __init__(self, message: str, field: str = None):
-        super().__init__(message, 400, "VALIDATION_ERROR")
+        super().__init__(message, 400)
         self.field = field
