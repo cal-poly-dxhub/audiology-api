@@ -9,7 +9,7 @@ fi
 
 JSON_FILE="$1"
 CONFIG_ID="$2"
-API_URL="https://bh8yj14k33.execute-api.us-west-2.amazonaws.com/prod/upload_config"
+API_URL="<Your stack's /upload_config resource endpoint>"
 API_KEY=${AUDIOLOGY_API_KEY}
 if [ -z "$API_KEY" ]; then
   echo "Error: AUDIOLOGY_API_KEY is not set."

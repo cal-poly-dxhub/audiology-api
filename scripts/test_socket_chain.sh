@@ -1,9 +1,9 @@
 # Upload a sample file and listen over WebSocket
 
-API_ID="bh8yj14k33"
-TABLE_NAME="AudiologyApiStack2-AudiologyJobTable1B46B45A-RYEJYTU3977G"
-FILE_NAME="data/report_sample.csv"
-WS_ENDPOINT="wss://2cuuwaf2bi.execute-api.us-west-2.amazonaws.com/prod"
+API_ID="<Your stack's API ID>"
+TABLE_NAME="<Your stack's job table name>"
+FILE_NAME="<Sample data to upload>"
+WS_ENDPOINT="<Your stack's WebSocket endpoint>"
 
 python scripts/clear_jobs.py "$TABLE_NAME"
 bash scripts/trigger_api_upload.sh "$API_ID" # Creates upload_out.json in root dir
