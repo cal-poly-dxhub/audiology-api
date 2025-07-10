@@ -67,11 +67,11 @@ class SubmissionApi(Construct):
 
         job_table.grant_read_write_data(bucket_response)
 
-        # Triggers for files of the form "input_reports/*.csv"
+        # Triggers for files of the form "input_reports/*"
         bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED_PUT,
             s3n.LambdaDestination(bucket_response),
-            s3.NotificationKeyFilter(prefix="input_reports/", suffix=".csv"),
+            s3.NotificationKeyFilter(prefix="input_reports/"),
         )
 
         self.powertools_layer = _lambda.LayerVersion.from_layer_version_arn(
