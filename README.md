@@ -7,7 +7,7 @@
 - An internet connection
 - OpenSSL (for generating a Next Auth secret)
 
-## API Testing ScriptsA
+## API Testing Scripts
 
 - `scripts/test_config_upload.sh` uploads a configuration from a JSON file.
 
