@@ -10,6 +10,11 @@ fi
 JSON_FILE="$1"
 CONFIG_ID="$2"
 API_URL="https://bh8yj14k33.execute-api.us-west-2.amazonaws.com/prod/upload_config"
+API_KEY=${AUDIOLOGY_API_KEY}
+if [ -z "$API_KEY" ]; then
+  echo "Error: AUDIOLOGY_API_KEY is not set."
+  exit 1
+fi
 
 # Check if JSON file exists
 if [ ! -f "$JSON_FILE" ]; then
@@ -36,6 +41,7 @@ echo "Uploading config '$CONFIG_ID' from '$JSON_FILE'"
 # Make the request
 curl -X POST "$API_URL" \
     -H "Content-Type: application/json" \
+    -H "x-api-key: $API_KEY" \
     -d "$PAYLOAD" \
     -s | jq .
     # -w "\nHTTP Status: %{http_code}\n" \
