@@ -15,7 +15,7 @@ def create_error_response(error: AudiologyAPIError, request_id: str = None) -> d
     """Create standardized error response to give back to the client"""
     response_body = {
         "error": {
-            "code": error.error_code or "INTERNAL_ERROR",
+            "code": error.status_code or "INTERNAL_ERROR",
             "message": error.message,
             "timestamp": datetime.now().isoformat(),
         }
