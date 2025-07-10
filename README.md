@@ -11,15 +11,15 @@
 
 - `scripts/test_config_upload.sh` uploads a configuration from a JSON file.
 
-```
-bash scripts/test_config_upload.sh config/config.json TestConfig
-```
+  ```
+  bash scripts/test_config_upload.sh config/config.json TestConfig
+  ```
 
 - `scripts/test_socket_chain.sh` demonstrates uploading a record and getting a response.
 
-```
-bash scripts/test_socket_chain.sh <File containing single record>
-```
+  ```
+  bash scripts/test_socket_chain.sh <File containing single record>
+  ```
 
 Both of these involve variables that need to be set (e.g., file names to upload 
 
