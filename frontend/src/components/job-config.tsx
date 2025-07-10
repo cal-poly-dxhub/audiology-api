@@ -259,7 +259,7 @@ export function JobConfigForm() {
                   <FormItem>
                     <FormLabel>Config ID</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., NotTestConfig" {...field} />
+                      <Input placeholder="e.g., TestConfig" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
