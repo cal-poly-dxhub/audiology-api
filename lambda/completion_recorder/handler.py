@@ -2,6 +2,7 @@ import boto3
 import os
 import json
 import sys
+from botocore.exceptions import ClientError
 
 sys.path.append("/opt/python")  # For lambda layers
 
@@ -58,6 +59,42 @@ def place_job_s3(job_id: str, job_info: dict) -> None:
         raise ValueError(f"Error logging job to S3: {str(e)}") from e
 
 
+def record_job_dynamo(job_id: str):
+    """
+    Updates the job status in DynamoDB to 'started'.
+    """
+
+    if job_table is None:
+        raise ValueError("DYNAMODB_TABLE environment variable is not set.")
+
+    try:
+        dynamodb.update_item(
+            TableName=job_table,
+            Key={"job_id": {"S": job_id}},
+            UpdateExpression="SET #status = :status",
+            ExpressionAttributeValues={
+                ":status": {"S": "started"},
+            },
+            ExpressionAttributeNames={
+                "#status": "completed",
+            },
+        )
+
+        print(f"Recorded that job {job_id} has started in DynamoDB.")
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"]["Message"]
+        print(f"DynamoDB ClientError: {error_code} - {error_message}")
+        raise Exception(f"Failed to record job in DynamoDB: {error_message}")
+    except ValueError as e:
+        print(f"Validation error: {e}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error recording job {job_id}: {e}")
+        raise Exception(f"Failed to record job {job_id}: {str(e)}")
+
+
 def report_job_completion(job_id: str, job_info: dict) -> None:
     """
     Obtains a websocket connection for a job if it exists and sends a report. Logs the
@@ -81,6 +118,7 @@ def report_job_completion(job_id: str, job_info: dict) -> None:
         data=job_info,
     )
 
+    record_job_dynamo(job_id=job_id)
     place_job_s3(job_id, job_info)
 
     if connection_id is not None:
