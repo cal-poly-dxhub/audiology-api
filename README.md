@@ -65,7 +65,7 @@ This project is not configured to deploy a frontend on AWS yet. However, you can
 ```env
 # Find these variables in the CloudFormation output after deploying the backend
 NEXT_PUBLIC_JOB_ENDPOINT=<value of SubmissionApiAudiologyApiEndpoint>
-NEXT_PUBLIC_WEBSOCKET_ENDPOINT=<value of WebSocketApiWebSocketEndpoint>
+NEXT_PUBLIC_WS_ENDPOINT=<value of WebSocketApiWebSocketEndpoint>
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=<value of UserPoolId>
 COGNITO_CLIENT_ID=<value of UserPoolClientId>
 
