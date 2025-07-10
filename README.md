@@ -21,7 +21,7 @@
   bash scripts/test_socket_chain.sh <File containing single record>
   ```
 
-Both of these involve variables that need to be set (e.g., file names to upload). They also look for the AUDIOLOGY_API_KEY environment variable. Either set this to a value in Secrets Manager or see below for instructions for creating a new key.
+Both of these involve variables that need to be set (e.g., API endpoints). They also look for the `AUDIOLOGY_API_KEY` environment variable. Either set this to a value in Secrets Manager or see below for instructions for creating a new key.
 
 ## Backend Deployment
 
