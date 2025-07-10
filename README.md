@@ -62,25 +62,25 @@ This project is not configured to deploy a frontend on AWS yet. However, you can
 
 - Create the file `frontend/.env.local` with the following environment variables:
 
-```env
-# Find these variables in the CloudFormation output after deploying the backend
-NEXT_PUBLIC_JOB_ENDPOINT=<value of SubmissionApiAudiologyApiEndpoint>
-NEXT_PUBLIC_WEBSOCKET_ENDPOINT=<value of WebSocketApiWebSocketEndpoint>
-NEXT_PUBLIC_COGNITO_USER_POOL_ID=<value of UserPoolId>
-COGNITO_CLIENT_ID=<value of UserPoolClientId>
-
-# From the OpenSSL command above
-NEXTAUTH_SECRET=<value generated from OpenSSL>
-
-# Pick a port. 3000 is a common default.
-NEXTAUTH_URL=http://localhost:<port> # e.g., http://localhost:3000
-```
+  ```env
+  # Find these variables in the CloudFormation output after deploying the backend
+  NEXT_PUBLIC_JOB_ENDPOINT=<value of SubmissionApiAudiologyApiEndpoint>
+  NEXT_PUBLIC_WEBSOCKET_ENDPOINT=<value of WebSocketApiWebSocketEndpoint>
+  NEXT_PUBLIC_COGNITO_USER_POOL_ID=<value of UserPoolId>
+  COGNITO_CLIENT_ID=<value of UserPoolClientId>
+  
+  # From the OpenSSL command above
+  NEXTAUTH_SECRET=<value generated from OpenSSL>
+  
+  # Pick a port. 3000 is a common default.
+  NEXTAUTH_URL=http://localhost:<port> # e.g., http://localhost:3000
+  ```
 
 - Deploy the frontend:
 
-```bash
-cd frontend && bun install && bun dev --port <port>
-```
+  ```bash
+  cd frontend && bun install && bun dev --port <port>
+  ```
 
 - Create a user with the create_user script: `bash scripts/create_user.sh`
 
