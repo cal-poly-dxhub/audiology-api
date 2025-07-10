@@ -7,6 +7,22 @@
 - An internet connection
 - OpenSSL (for generating a Next Auth secret)
 
+## API Testing ScriptsA
+
+- `scripts/test_config_upload.sh` uploads a configuration from a JSON file.
+
+```
+bash scripts/test_config_upload.sh config/config.json TestConfig
+```
+
+- `scripts/test_socket_chain.sh` demonstrates uploading a record and getting a response.
+
+```
+bash scripts/test_socket_chain.sh <File containing single record>
+```
+
+Both of these involve variables that need to be set (e.g., file names to upload 
+
 ## Backend Deployment
 
 This project is deployed on AWS using the Cloud Development Kit (CDK). The deployment process is as follows:
