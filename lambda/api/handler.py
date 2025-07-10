@@ -159,15 +159,13 @@ def store_or_update_config(
     """
     timestamp = datetime.now().isoformat()
 
-    if not item_exists:
-        item["created_at"] = {"S": timestamp}
-
     item = {
         "config_id": {"S": config_name},
         "config_data": {"S": json.dumps(config_data)},
         "updated_at": {"S": timestamp},
     }
 
+    # Check if the config exists
     try:
         response = dynamodb.get_item(
             TableName=CONFIG_TABLE_NAME,
@@ -181,6 +179,7 @@ def store_or_update_config(
 
     item_exists = "Item" in response
 
+    # Update or replace the config item
     try:
         dynamodb.put_item(TableName=CONFIG_TABLE_NAME, Item=item)
     except ClientError as e:
@@ -204,7 +203,6 @@ def upload_config_handler():
     config_name = json_body["config_name"]
     config_data = json_body["config_data"]
 
-    config_exists = check_config_exists(config_name)
     action = store_or_update_config(config_name, config_data)
 
     message = f"Config '{config_name}' successfully {action}."
@@ -214,7 +212,6 @@ def upload_config_handler():
             "message": message,
             "config_name": config_name,
             "action": action,
-            "timestamp": timestamp,
         },
         "headers": {"Content-Type": "application/json"},
     }
