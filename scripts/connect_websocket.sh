@@ -1,11 +1,13 @@
 #!/bin/bash
 
 WS_ENDPOINT=$1
-JOB_NAME="report_sample"
+JOB_ID=$2
 
 # URL-encode the job name
-ENCODED_JOB_NAME=$(echo -n "$JOB_NAME" | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
+ENCODED_JOB_ID=$(echo -n "$JOB_ID" | python3 -c "import urllib.parse; print(urllib.parse.quote(input()))")
+
+echo "Using job ID: $JOB_ID"
 
 # Include the encoded job name as a query parameter in the URL
-wscat -c "${WS_ENDPOINT}?jobName=${ENCODED_JOB_NAME}" 
+wscat -c "${WS_ENDPOINT}?jobId=${ENCODED_JOB_ID}" 
 

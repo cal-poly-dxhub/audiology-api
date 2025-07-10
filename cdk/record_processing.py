@@ -127,7 +127,7 @@ class RecordProcessing(Construct):
             self,
             "PrepareStepPayload",
             parameters={
-                "jobName.$": "$.jobName",
+                "jobId.$": "$.jobId",
                 "executionId.$": "$$.Execution.Id",
             },
         )

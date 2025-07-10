@@ -61,7 +61,7 @@ class AudiologyApiStack(Stack):
             self,
             "AudiologyJobTable",
             partition_key=dynamodb.Attribute(
-                name="job_name", type=dynamodb.AttributeType.STRING
+                name="job_id", type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,

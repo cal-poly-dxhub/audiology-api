@@ -11,6 +11,7 @@ import json
 from botocore.utils import ClientError
 import sys
 import logging
+import uuid
 
 from audiology_errors.errors import ValidationError, InternalServerError
 from audiology_errors.utils import handle_errors
@@ -38,35 +39,25 @@ def create_dynamo_job(
     job_name: str,
     config_id: str,
     institution_id: str,
-) -> None:
+) -> str:
     """Create a new job in the DynamoDB job table.
 
     Raises:
         ValidationError: If the job name already exists in the job table.
         InternalServerError: If there is an error creating the job in DynamoDB or checking job existence.
 
-    """
-    job_exists = False
-    try:
-        response = dynamodb.get_item(
-            TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
-        )
-        job_exists = "Item" in response
-    except ClientError as e:
-        logger.error(f"Error checking job existence in DynamoDB: {e}")
-        raise InternalServerError(f"Error checking job existence.") from e
+    Returns:
+        str: The UUID of the created job.
 
-    if job_exists:
-        raise ValidationError(
-            f"Job with name '{job_name}' already exists.",
-            field="job_name",
-        )
+    """
+
+    job_id = str(uuid.uuid4())
 
     try:
         dynamodb.put_item(
             TableName=JOB_TABLE,
             Item={
+                "job_id": {"S": job_id},
                 "job_name": {"S": job_name},
                 "config_id": {"S": config_id},
                 "institution_id": {"S": institution_id},
@@ -76,6 +67,8 @@ def create_dynamo_job(
     except ClientError as e:
         logger.error(f"Error creating job in job table: {e}")
         raise InternalServerError(f"Error creating job in DynamoDB.") from e
+
+    return job_id
 
 
 def generate_presigned_url(bucket_name, file_key, mime_type) -> str:
@@ -128,9 +121,16 @@ def upload_handler():
     config_id = json_body["config_id"]
     institution_id = json_body["institution_id"]
     mime_type = json_body["mime_type"]
-    file_key = f"input_reports/{job_name}.{supported_types[mime_type]['extension']}"
 
     logger.info("Job name: %s", job_name)
+
+    job_id = create_dynamo_job(
+        job_name=job_name,
+        config_id=config_id,
+        institution_id=institution_id,
+    )
+
+    file_key = f"input_reports/{job_id}.{supported_types[mime_type]['extension']}"
 
     presigned_url = generate_presigned_url(
         bucket_name=os.environ["BUCKET_NAME"],
@@ -140,15 +140,9 @@ def upload_handler():
 
     logger.info(f"Generated pre-signed URL: {presigned_url}")
 
-    create_dynamo_job(
-        job_name=job_name,
-        config_id=config_id,
-        institution_id=institution_id,
-    )
-
     return {
         "statusCode": 200,
-        "body": {"url": presigned_url, "key": file_key},
+        "body": {"url": presigned_url, "key": file_key, "job_id": job_id},
         "headers": {"Content-Type": "application/json"},
     }
 

@@ -6,8 +6,11 @@ FILE_NAME="data/report_sample.csv"
 WS_ENDPOINT="wss://2cuuwaf2bi.execute-api.us-west-2.amazonaws.com/prod"
 
 python scripts/clear_jobs.py "$TABLE_NAME"
-bash scripts/trigger_api_upload.sh "$API_ID"
+bash scripts/trigger_api_upload.sh "$API_ID" # Creates upload_out.json in root dir
+JOB_ID=$(jq -r '.body.job_id' upload_out.json)
+echo "Job ID: $JOB_ID"
+
 bash scripts/put_presigned.sh "$FILE_NAME"
 sleep 2
-bash scripts/connect_websocket.sh "$WS_ENDPOINT" 
+bash scripts/connect_websocket.sh "$WS_ENDPOINT" "$JOB_ID"
 

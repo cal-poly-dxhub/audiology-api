@@ -15,7 +15,7 @@ def handle_connect(
     """
     Stores the connection ID in Dynamo, taking a Job-Name in headers.
     """
-    job_name = query_string_parameters.get("jobName")
+    job_id = query_string_parameters.get("jobId")
 
     if not job_table:
         return {
@@ -23,23 +23,23 @@ def handle_connect(
             "body": "Job table name is not set in environment variables.",
         }
 
-    if not job_name:
+    if not job_id:
         return {
             "statusCode": 400,
-            "body": "jobName parameter is required.",
+            "body": "jobId parameter is required.",
         }
 
-    if not job_exists(job_name):
+    if not job_exists(job_id):
         return {
             "statusCode": 400,
-            "body": f"Job with name {job_name} does not exist.",
+            "body": f"Job with id {job_id} does not exist.",
         }
 
     try:
         # Update job table with connection ID and domain name
         response = dynamodb.update_item(
             TableName=job_table,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
             UpdateExpression="SET connection_id = :connection_id, domain_name = :domain_name",
             ExpressionAttributeValues={
                 ":connection_id": {"S": connection_id},
@@ -71,7 +71,7 @@ def handle_connect(
     }
 
 
-def job_exists(job_name: str) -> bool:
+def job_exists(job_id: str) -> bool:
     """
     Checks if a job with the given name already exists in DynamoDB.
     """
@@ -82,7 +82,7 @@ def job_exists(job_name: str) -> bool:
     try:
         response = dynamodb.get_item(
             TableName=job_table,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
         )
         return "Item" in response
     except Exception as e:

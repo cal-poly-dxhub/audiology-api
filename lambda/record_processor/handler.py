@@ -22,22 +22,21 @@ JOB_TABLE = os.environ.get("JOB_TABLE", None)
 CONFIG_TABLE = os.environ.get("CONFIG_TABLE", None)
 
 
-def retrieve_job_info(job_name: str) -> tuple[str, str, str, str]:
-
+def retrieve_job_info(job_id: str) -> tuple[str, str, str, str]:
     try:
         job_response = dynamodb.get_item(
             TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
         )
     except Exception as e:
         logger.error(
             f"Error retrieving job info from DynamoDB: {traceback.format_exc()}"
         )
-        raise Exception(f"Error retrieving job info for job: {job_name}") from e
+        raise Exception(f"Error retrieving job info for job: {job_id}") from e
 
     job_item = job_response["Item"]
     if not job_item:
-        raise ValueError(f"No job found with name: {job_name}")
+        raise ValueError(f"No job found with ID: {job_id}")
 
     input_bucket = job_item.get("input_bucket", {}).get("S", None)
     input_key = job_item.get("input_key", {}).get("S", None)
@@ -51,7 +50,7 @@ def retrieve_job_info(job_name: str) -> tuple[str, str, str, str]:
         or institution_id is None
     ):
         logger.error(
-            f"Missing required fields in job item for job: {job_name}. "
+            f"Missing required fields in job item for job: {job_id}. "
             f"input_bucket: {input_bucket}, input_key: {input_key}, "
             f"config_id: {config_id}, institution_id: {institution_id}"
         )
@@ -247,7 +246,7 @@ def invoke_bedrock_model(prompt: str) -> str:
         raise
 
 
-def job_exists(job_name: str) -> bool:
+def job_exists(job_id: str) -> bool:
     """
     Checks if a job with the given name already exists in DynamoDB.
     """
@@ -255,7 +254,7 @@ def job_exists(job_name: str) -> bool:
     try:
         response = dynamodb.get_item(
             TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
         )
         return "Item" in response
     except Exception as e:
@@ -264,7 +263,7 @@ def job_exists(job_name: str) -> bool:
         ) from e
 
 
-def log_execution_arn(execution_arn: str, job_name: str) -> None:
+def log_execution_arn(execution_arn: str, job_id: str) -> None:
     """
     Records the execution ARN for the job in DynamoDB.
     """
@@ -273,15 +272,15 @@ def log_execution_arn(execution_arn: str, job_name: str) -> None:
         print("Updating DynamoDB with execution ARN")
         dynamodb.update_item(
             TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
             UpdateExpression="SET execution_arn = :execution_arn",
             ExpressionAttributeValues={":execution_arn": {"S": execution_arn}},
-            ConditionExpression="attribute_exists(job_name)",
+            ConditionExpression="attribute_exists(job_id)",
             ReturnValues="UPDATED_NEW",
         )
-        print("Updated dynamodb with execution ARN for job:", job_name)
+        print("Updated dynamodb with execution ARN for job:", job_id)
     except dynamodb.exceptions.ConditionalCheckFailedException:
-        raise ValueError(f"Job with name {job_name} does not exist.")
+        raise ValueError(f"Job with ID {job_id} does not exist.")
     except Exception as e:
         logger.error(
             f"Error updating DynamoDB with execution ARN: {traceback.format_exc()}"
@@ -377,18 +376,18 @@ def retrieve_job_str(input_bucket: str, input_key: str) -> str:
         raise Exception("Error reading job file contents.") from e
 
 
-def process_job(job_name: str) -> dict:
+def process_job(job_id: str) -> dict:
     """
     Processes the job file data based on the input configuration, returning a
     processed record.
     """
 
-    config_id, input_bucket, input_key, institution = retrieve_job_info(job_name)
+    config_id, input_bucket, input_key, institution = retrieve_job_info(job_id)
 
     config = retrieve_config(config_id)
 
     logger.info(
-        f"Record processor got job name: {job_name} with config ID: {config_id} and input bucket: {input_bucket}, input key: {input_key}"
+        f"Record processor got job ID: {job_id} with config ID: {config_id} and input bucket: {input_bucket}, input key: {input_key}"
     )
 
     try:
@@ -425,7 +424,7 @@ def handler(event, context):
         return {
             "statusCode": 500,
             "result": {"error": "Internal server error."},
-            "jobName": None,
+            "jobId": None,
         }
 
     if BUCKET_NAME is None:
@@ -433,7 +432,7 @@ def handler(event, context):
         return {
             "statusCode": 500,
             "result": {"error": "Internal server error."},
-            "jobName": None,
+            "jobId": None,
         }
 
     if CONFIG_TABLE is None:
@@ -441,42 +440,42 @@ def handler(event, context):
         return {
             "statusCode": 500,
             "result": {"error": "Internal server error."},
-            "jobName": None,
+            "jobId": None,
         }
 
-    job_name = event.get("jobName", None)
+    job_id = event.get("jobId", None)
     execution_arn = event.get("executionId", None)
 
-    if not (job_name and execution_arn):
-        logger.error("Bucket responses lanbda did not pass jobName and executionId.")
+    if not (job_id and execution_arn):
+        logger.error("Bucket responses lanbda did not pass jobId and executionId.")
         return {
             "statusCode": 500,
             "result": {"error": "Error starting job execution."},
-            "jobName": job_name,
+            "jobId": job_id,
         }
 
     try:
-        log_execution_arn(execution_arn=execution_arn, job_name=job_name)
+        log_execution_arn(execution_arn=execution_arn, job_id=job_id)
     except Exception as e:
         logger.error(f"Error logging execution ARN: {traceback.format_exc()}")
         return {
             "statusCode": 500,
             "result": {"error": f"Error logging execution details: {str(e)}"},
-            "jobName": job_name,
+            "jobId": job_id,
         }
 
     try:
-        processing_result = process_job(job_name=job_name)
+        processing_result = process_job(job_id=job_id)
     except Exception as e:
-        logger.error(f"Error processing job {job_name}: {traceback.format_exc()}")
+        logger.error(f"Error processing job {job_id}: {traceback.format_exc()}")
         return {
             "statusCode": 500,
             "result": {"error": f"Error processing job: {str(e)}"},
-            "jobName": job_name,
+            "jobId": job_id,
         }
 
     return {
         "statusCode": 200,
         "result": processing_result,
-        "jobName": job_name,
+        "jobId": job_id,
     }

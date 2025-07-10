@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 
 interface SocketStreamProps {
   isFileUploaded: boolean
-  jobName?: string
+  jobId?: string
 }
 
 interface StreamMessage {
@@ -17,7 +17,7 @@ interface StreamMessage {
   message: string
 }
 
-export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
+export function SocketStream({ isFileUploaded, jobId }: SocketStreamProps) {
   const [isConnected, setIsConnected] = useState(false)
   const [messages, setMessages] = useState<StreamMessage[]>([])
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
@@ -51,10 +51,10 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
         setConnectionStatus('connecting')
 
         try {
-          if (jobName) {
+          if (jobId) {
             // For WebSocket connections, we need to pass headers via subprotocols or query params
             // Since WebSocket headers are limited, we'll use query parameters
-            const wsUrlWithJobName = `${wsUrl}?jobName=${encodeURIComponent(jobName)}`
+            const wsUrlWithJobName = `${wsUrl}?jobId=${encodeURIComponent(jobId)}`
             wsRef.current = new WebSocket(wsUrlWithJobName)
           } else {
             wsRef.current = new WebSocket(wsUrl)
@@ -63,7 +63,7 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
           wsRef.current.onopen = () => {
             setIsConnected(true)
             setConnectionStatus('connected')
-            addMessage('info', `Connected to processing stream. Monitoring job ${jobName}.`)
+            addMessage('info', `Connected to processing stream. Monitoring job ${jobId}.`)
           }
 
           wsRef.current.onmessage = (event) => {
@@ -120,7 +120,7 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
         wsRef.current = null
       }
     }
-  }, [isFileUploaded, jobName])
+  }, [isFileUploaded, jobId])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -178,8 +178,8 @@ export function SocketStream({ isFileUploaded, jobName }: SocketStreamProps) {
             {getStatusText()}
           </Badge>
         </div>
-        {jobName && (
-          <p className="text-sm text-gray-600">Monitoring: {jobName}</p>
+        {jobId && (
+          <p className="text-sm text-gray-600">Monitoring: {jobId}</p>
         )}
       </CardHeader>
       <CardContent className="p-0">

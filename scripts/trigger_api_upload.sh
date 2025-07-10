@@ -20,4 +20,3 @@ curl -X POST "https://$API_ID.execute-api.$REGION.amazonaws.com/prod/upload" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
   -d '{"job_name": "report_sample", "config_id": "TestConfig", "institution_id": "CDC", "mime_type": "text/csv"}' > upload_out.json
-

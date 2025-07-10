@@ -41,7 +41,7 @@ export function JobConfigForm() {
   const [uploadUrl, setUploadUrl] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isFileUploaded, setIsFileUploaded] = useState(false)
-  const [submittedJobName, setSubmittedJobName] = useState<string>("")
+  const [submittedJobId, setSubmittedJobId] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!session && status !== "loading") {
@@ -94,6 +94,11 @@ export function JobConfigForm() {
       }
 
       const responseData = await response.json()
+      const jobId = responseData.body?.job_id
+
+      if (!jobId) {
+        throw new Error("Job ID not found in response")
+      }
 
       // Echo response to console
       console.log("API Response:", JSON.stringify(responseData, null, 2))
@@ -119,8 +124,8 @@ export function JobConfigForm() {
           setUploadUrl(uploadUrlFromResponse)
         }
 
-        // Store job name for later use
-        setSubmittedJobName(values.job_name)
+        // Store job id for later use
+        setSubmittedJobId(jobId)
 
         // Show success toast
         toast.success("Job submitted successfully!", {
@@ -325,7 +330,7 @@ export function JobConfigForm() {
         <div>
           <SocketStream
             isFileUploaded={isFileUploaded}
-            jobName={submittedJobName}
+            jobId={submittedJobId}
           />
         </div>
       </div>

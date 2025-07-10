@@ -9,12 +9,12 @@ job_table = os.getenv("JOB_TABLE", None)
 dynamodb = boto3.client("dynamodb")
 
 
-def get_connection_details(job_table, job_name):
+def get_connection_details(job_table, job_id):
     try:
         # Retrieve connection_id and dnomain_name from DynamoDB
         response = dynamodb.get_item(
             TableName=job_table,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
             ProjectionExpression="connection_id, domain_name",
         )
         item = response.get("Item", {})
@@ -25,9 +25,9 @@ def get_connection_details(job_table, job_name):
 
         # Validate that both fields are present
         if not connection_id:
-            raise ValueError(f"No connection ID found for job: {job_name}")
+            raise ValueError(f"No connection ID found for job: {job_id}")
         if not domain_name:
-            raise ValueError(f"No domain name found for job: {job_name}")
+            raise ValueError(f"No domain name found for job: {job_id}")
 
         print("Found connection ID:", connection_id, "and domain name:", domain_name)
         return connection_id, domain_name
@@ -35,7 +35,7 @@ def get_connection_details(job_table, job_name):
         raise ValueError(f"Error retrieving connection details: {str(e)}") from e
 
 
-def place_job_s3(job_name: str, job_info: dict) -> None:
+def place_job_s3(job_id: str, job_info: dict) -> None:
     """
     Logs the completed job JSON to S3.
     """
@@ -49,27 +49,27 @@ def place_job_s3(job_name: str, job_info: dict) -> None:
     try:
         s3.put_object(
             Bucket=bucket_name,
-            Key=f"completed_jobs/{job_name}.json",
+            Key=f"completed_jobs/{job_id}.json",
             Body=json.dumps(job_info, indent=2),
             ContentType="application/json",
         )
-        print(f"Successfully logged job {job_name} to S3 bucket {bucket_name}")
+        print(f"Successfully logged job {job_id} to S3 bucket {bucket_name}")
     except Exception as e:
         raise ValueError(f"Error logging job to S3: {str(e)}") from e
 
 
-def report_job_completion(job_name: str, job_info: dict) -> None:
+def report_job_completion(job_id: str, job_info: dict) -> None:
     """
     Obtains a websocket connection for a job if it exists and sends a report. Logs the
     completed job JSON to S3.
     """
 
     # TODO: error checking
-    connection_id, domain_name = get_connection_details(job_table, job_name)
+    connection_id, domain_name = get_connection_details(job_table, job_id)
 
     if not connection_id or not domain_name:
         print(
-            f"Connection ID or domain name not found for job: {job_name}, skipping report"
+            f"Connection ID or domain name not found for job: {job_id}, skipping report"
         )
         return
 
@@ -81,7 +81,7 @@ def report_job_completion(job_name: str, job_info: dict) -> None:
         data=job_info,
     )
 
-    place_job_s3(job_name, job_info)
+    place_job_s3(job_id, job_info)
 
     if connection_id is not None:
         print(f"Sending report to connection {connection_id}: {job_info}")
@@ -104,37 +104,37 @@ def send_to_client(
 
 def handler(event, context):
     """
-    Requires that a jobName and result to stream back over websocket are both passed.
+    Requires that a jobId and result to stream back over websocket are both passed.
     """
 
     if job_table is None:
         raise ValueError("JOB_TABLE environment variable is not set.")
 
-    job_name = event.get("jobName", None)
+    job_id = event.get("jobId", None)
     result = event.get("result", None)
 
-    if not job_name or not result:
-        raise ValueError("Event does not contain required fields: jobName or result.")
+    if not job_id or not result:
+        raise ValueError("Event does not contain required fields: jobId or result.")
 
     print(f"Job output from record processor: {result}")
 
     print(
         "Completion recorder invoked for job:",
-        job_name,
+        job_id,
     )
 
-    if not job_name:
+    if not job_id:
         return {
             "statusCode": 400,
-            "message": "Record processor lambda did not send forward a job name.",
+            "message": "Record processor lambda did not send forward a job ID.",
         }
 
-    print("Logging for job:", job_name)
+    print("Logging for job:", job_id)
 
     # TODO: error checking
-    report_job_completion(job_name, result)
+    report_job_completion(job_id, result)
 
-    print("Completion recorder finished processing for job:", job_name)
+    print("Completion recorder finished processing for job:", job_id)
 
     return {
         "statusCode": 200,

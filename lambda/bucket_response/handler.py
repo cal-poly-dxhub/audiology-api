@@ -20,7 +20,7 @@ step_function_arn = os.getenv("STEP_FUNCTION_ARN", None)
 sfn = boto3.client("stepfunctions")
 
 
-def job_exists(job_name: str) -> bool:
+def job_exists(job_id: str) -> bool:
     """
     Checks if a job with the given name already exists in DynamoDB.
     """
@@ -31,14 +31,14 @@ def job_exists(job_name: str) -> bool:
     try:
         response = dynamodb.get_item(
             TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
         )
         return "Item" in response
     except Exception as e:
         raise ValueError(f"Error checking job existence: {str(e)}") from e
 
 
-def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
+def record_job_dynamo(job_id: str, bucket_name: str, input_key: str):
     """
     Updates the DynamoDB job record with the input s3 path and status.
     """
@@ -48,25 +48,25 @@ def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
 
     s3_path = f"s3://{bucket_name}/{input_key}"
 
-    if not job_exists(job_name):
-        raise ValueError(f"Job with name {job_name} does not exist.")
+    if not job_exists(job_id):
+        raise ValueError(f"Job with ID {job_id} does not exist.")
 
     try:
         dynamodb.update_item(
             TableName=JOB_TABLE,
-            Key={"job_name": {"S": job_name}},
+            Key={"job_id": {"S": job_id}},
             UpdateExpression="SET input_bucket = :input_bucket, input_key = :input_key, #status = :status",
             ExpressionAttributeValues={
                 ":input_bucket": {"S": bucket_name},
                 ":input_key": {"S": input_key},
-                ":status": {"S": "created"},
+                ":status": {"S": "started"},
             },
             ExpressionAttributeNames={
                 "#status": "status",
             },
         )
 
-        logger.info(f"Successfully recorded job {job_name} with S3 path {s3_path}")
+        logger.info(f"Successfully recorded job {job_id} with S3 path {s3_path}")
 
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
@@ -77,11 +77,11 @@ def record_job_dynamo(job_name: str, bucket_name: str, input_key: str):
         logger.error(f"Validation error: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error recording job {job_name}: {e}")
-        raise Exception(f"Failed to record job {job_name}: {str(e)}")
+        logger.error(f"Unexpected error recording job {job_id}: {e}")
+        raise Exception(f"Failed to record job {job_id}: {str(e)}")
 
 
-def trigger_record_processing(job_name: str):
+def trigger_record_processing(job_id: str):
     """
     Triggers the step function for record processing with the given job name.
     """
@@ -89,10 +89,10 @@ def trigger_record_processing(job_name: str):
     try:
         response = sfn.start_execution(
             stateMachineArn=step_function_arn,
-            input=json.dumps({"jobName": job_name}),
+            input=json.dumps({"jobId": job_id}),
         )
         logger.info(
-            f"Step function triggered for job {job_name}. Execution ARN: {response['executionArn']}"
+            f"Step function triggered for job {job_id}. Execution ARN: {response['executionArn']}"
         )
         return response["executionArn"]
     except Exception as e:
@@ -119,11 +119,11 @@ def handler(event: dict, context: dict) -> dict:
             case "ObjectCreated:Put":
                 bucket_name = record["s3"]["bucket"]["name"]
                 object_key = record["s3"]["object"]["key"]
-                job_name = object_key.split("/")[-1].replace(".csv", "")
+                job_id = os.path.splitext(object_key.split("/")[-1])[0]
 
                 try:
-                    record_job_dynamo(job_name, bucket_name, object_key)
-                    logger.info(f"Job {job_name} recorded successfully.")
+                    record_job_dynamo(job_id, bucket_name, object_key)
+                    logger.info(f"Job {job_id} recorded successfully.")
 
                 except ValueError as e:
                     logger.error(f"Error recording job: {str(e)}")
@@ -132,8 +132,8 @@ def handler(event: dict, context: dict) -> dict:
                 # TODO: more correct error handling
                 try:
                     # TODO: return val
-                    trigger_record_processing(job_name)
-                    logger.info(f"Step function triggered for job {job_name}.")
+                    trigger_record_processing(job_id)
+                    logger.info(f"Step function triggered for job {job_id}.")
                 except ValueError as e:
                     logger.error(f"Error triggering step function: {str(e)}")
                     return {"statusCode": 500, "body": str(e)}
