@@ -189,7 +189,7 @@ class SubmissionApi(Construct):
                 # to a placeholder for JWT auth.
                 apigateway.IdentitySource.header("X-API-Key"),
             ],
-            results_cache_ttl=Duration.minutes(5),
+            results_cache_ttl=Duration.minutes(0),
         )
 
         upload_resource = self.api.root.add_resource("upload")
