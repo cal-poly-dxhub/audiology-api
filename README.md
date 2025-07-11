@@ -7,6 +7,46 @@
 - An internet connection
 - OpenSSL (for generating a Next Auth secret)
 
+## System Design
+
+1. Authorizer Lambda:
+   - Handles authentication for API Gateway
+   - Checks for JSON Web Token (JWT) from Cognito
+   - Checks for API key if JWT is not present
+   - Returns a policy document defining user permissions
+
+2. API Lambda:
+   - Handles API Gateway requests
+   - Contains two main handlers:
+     a. Upload Config Handler: Processes configuration uploads
+     b. Upload Handler: Handles file uploads, creates jobs, and returns pre-signed URLs
+
+3. Record Processor Lambda:
+   - Contains prompts for processing the uploaded data
+   - Triggered by a step function
+
+4. Bucket Response Lambda:
+   - Triggered by S3 put operations
+   - Initiates the step function that triggers the Record Processor Lambda
+
+5. Completion Lambda:
+   - Handles the completion of the job processing
+
+6. WebSocket Lambda:
+   - Manages WebSocket connections
+   - Uses job IDs to connect clients to the appropriate WebSocket route
+
+Overall design flow:
+1. User authenticates through API Gateway, which uses the Authorizer Lambda
+2. User uploads a configuration using the API Lambda's Upload Config Handler
+3. User initiates a job using the API Lambda's Upload Handler, receiving a pre-signed URL and job ID
+4. User uploads the file to S3 using the pre-signed URL
+5. Bucket Response Lambda triggers a step function
+6. Step function initiates the Record Processor Lambda
+7. Processing completes, and the Completion Lambda is invoked
+8. User can connect to a WebSocket using the job ID to receive updates
+
+
 ## API Testing Scripts
 
 - `scripts/test_config_upload.sh` uploads a configuration from a JSON file.
