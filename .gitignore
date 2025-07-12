@@ -10,3 +10,6 @@ __pycache__
 cdk.out
 
 /data
+
+.env
+upload_out.json
