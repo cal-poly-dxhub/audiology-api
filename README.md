@@ -60,21 +60,21 @@ Thanks for your interest in our solution.  Having specific examples of replicati
    - Initiates the step function that triggers the Record Processor Lambda
 
 5. Completion Lambda:
-   - Handles the completion of the job processing
+   - Handles the completion of the job processing by reporting results over WebSocket and marking the job as complete in job records
 
 6. WebSocket Lambda:
-   - Manages WebSocket connections
-   - Uses job IDs to connect clients to the appropriate WebSocket route
+   - Manages WebSocket connections, responding to `$connect`, `$disconnect`, and `$default`
+   - Uses job IDs to connect clients to the appropriate WebSocket stream
 
 Overall design flow:
 1. User authenticates through API Gateway, which uses the Authorizer Lambda
 2. User uploads a configuration using the API Lambda's Upload Config Handler
 3. User initiates a job using the API Lambda's Upload Handler, receiving a pre-signed URL and job ID
 4. User uploads the file to S3 using the pre-signed URL
-5. Bucket Response Lambda triggers a step function
+5. Bucket Response Lambda triggers a step function, and the user can connect to WebSocket to listen to job events
 6. Step function initiates the Record Processor Lambda
 7. Processing completes, and the Completion Lambda is invoked
-8. User can connect to a WebSocket using the job ID to receive updates
+8. User receives completion updates over WebSocket connection
 
 
 ## API Testing Scripts
