@@ -32,6 +32,7 @@ class SubmissionApi(Construct):
         user_pool: cognito.UserPool,
         user_pool_client: cognito.UserPoolClient,
         error_layer: _lambda.LayerVersion,
+        api_keys_secret: secretsmanager.Secret,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -125,21 +126,6 @@ class SubmissionApi(Construct):
             allow_credentials=False,
         )
 
-        # Create Secrets Manager secret to store API keys
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        self.secret_name = f"audiology-api/api-keys-{timestamp}"
-        self.api_keys_secret = secretsmanager.Secret(
-            self,
-            "ApiKeysSecret",
-            secret_name=self.secret_name,
-            description="API keys for Audiology API",
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template='{"api_keys": []}',
-                generate_string_key="placeholder",
-                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\",
-            ),
-        )
-
         # Create Lambda authorizer function
         self.authorizer_function = _lambda.Function(
             self,
@@ -147,7 +133,7 @@ class SubmissionApi(Construct):
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="handler.handler",
             code=_lambda.Code.from_asset(
-                "lambda/authorizer",
+                "lambda/api_authorizer",
                 bundling={
                     "image": _lambda.Runtime.PYTHON_3_13.bundling_image,
                     "command": [
@@ -162,13 +148,13 @@ class SubmissionApi(Construct):
             environment={
                 "USER_POOL_ID": user_pool.user_pool_id,
                 "USER_POOL_CLIENT_ID": user_pool_client.user_pool_client_id,
-                "API_KEYS_SECRET_NAME": self.api_keys_secret.secret_name,
+                "API_KEYS_SECRET_NAME": api_keys_secret.secret_name,
             },
             layers=[error_layer],
         )
 
         # Grant the authorizer function permission to read the secret
-        self.api_keys_secret.grant_read(self.authorizer_function)
+        api_keys_secret.grant_read(self.authorizer_function)
 
         # Create the API Gateway
         self.api = apigateway.RestApi(

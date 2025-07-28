@@ -7,6 +7,7 @@ from cdk.web_socket_api import WebSocketApi
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_secretsmanager as secretsmanager
 
 
 class AudiologyApiStack(Stack):
@@ -55,6 +56,20 @@ class AudiologyApiStack(Stack):
             ),
             generate_secret=False,
             prevent_user_existence_errors=True,
+        )
+
+        # Create API Keys Secret
+        self.api_keys_secret = secretsmanager.Secret(
+            self,
+            "AudiologyApiKeysSecret",
+            secret_name="audiology-api-keys",
+            description="API keys for Audiology API authentication",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template='{"api_keys": []}',
+                generate_string_key="placeholder",
+                exclude_characters="",
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         self.audiology_table = dynamodb.Table(
@@ -116,6 +131,9 @@ class AudiologyApiStack(Stack):
             "WebSocketApi",
             job_table=self.audiology_table,
             error_layer=self.error_layer,
+            user_pool_id=self.user_pool.user_pool_id,
+            user_pool_client_id=self.user_pool_client.user_pool_client_id,
+            api_keys_secret_name=self.api_keys_secret.secret_name,
         )
 
         self.record_processing = RecordProcessing(
@@ -139,6 +157,7 @@ class AudiologyApiStack(Stack):
             user_pool=self.user_pool,
             user_pool_client=self.user_pool_client,
             error_layer=self.error_layer,
+            api_keys_secret=self.api_keys_secret,
         )
 
         CfnOutput(
@@ -158,6 +177,6 @@ class AudiologyApiStack(Stack):
         CfnOutput(
             self,
             "ApiKeysSecretName",
-            value=self.submission_api.api_keys_secret.secret_name,
+            value=self.api_keys_secret.secret_name,
             description="Name of the Secrets Manager secret containing API keys",
         )

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { useSession } from "next-auth/react";
 
 interface SocketStreamProps {
   isFileUploaded: boolean
@@ -23,6 +24,7 @@ export function SocketStream({ isFileUploaded, jobId }: SocketStreamProps) {
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const wsRef = useRef<WebSocket | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const { data: session } = useSession();
 
   useEffect(() => {
     if (!isFileUploaded) {
@@ -51,20 +53,41 @@ export function SocketStream({ isFileUploaded, jobId }: SocketStreamProps) {
         setConnectionStatus('connecting')
 
         try {
-          if (jobId) {
-            // For WebSocket connections, we need to pass headers via subprotocols or query params
-            // Since WebSocket headers are limited, we'll use query parameters
-            const wsUrlWithJobName = `${wsUrl}?jobId=${encodeURIComponent(jobId)}`
-            wsRef.current = new WebSocket(wsUrlWithJobName)
-          } else {
-            wsRef.current = new WebSocket(wsUrl)
+          if (!session?.accessToken) {
+            console.error(
+              "No access token available for WebSocket authentication"
+            );
+            setConnectionStatus("error");
+            addMessage("error", "Authentication token not available");
+            return;
           }
 
-          wsRef.current.onopen = () => {
-            setIsConnected(true)
-            setConnectionStatus('connected')
-            addMessage('info', `Connected to processing stream. Monitoring job ${jobId}.`)
+          // Build query parameters for authentication and job monitoring
+          const params = new URLSearchParams();
+
+          if (jobId) {
+            params.append("jobId", jobId);
           }
+
+          // Add JWT token for authentication
+          if (!session.accessToken) {
+            console.error("No access token found in session");
+          }
+
+          params.append("authorization", `Bearer ${session.accessToken}`);
+          params.append("ApiKey", "placeholder"); // Superseded by JWT token
+
+          const wsUrlWithParams = `${wsUrl}?${params.toString()}`;
+          wsRef.current = new WebSocket(wsUrlWithParams);
+
+          wsRef.current.onopen = () => {
+            setIsConnected(true);
+            setConnectionStatus("connected");
+            addMessage(
+              "info",
+              `Connected to processing stream. Monitoring job ${jobId}.`
+            );
+          };
 
           wsRef.current.onmessage = (event) => {
             try {
@@ -119,8 +142,8 @@ export function SocketStream({ isFileUploaded, jobId }: SocketStreamProps) {
         wsRef.current.close()
         wsRef.current = null
       }
-    }
-  }, [isFileUploaded, jobId])
+    };
+  }, [isFileUploaded, jobId, session?.accessToken]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

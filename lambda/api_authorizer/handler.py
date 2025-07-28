@@ -7,7 +7,7 @@ import requests
 from typing import Dict, Any, Optional
 import sys
 
-from audiology_errors.errors import ValidationError, InternalServerError
+from audiology_errors.errors import InternalServerError
 
 sys.path.append("/opt/python")  # For lambda layers
 
