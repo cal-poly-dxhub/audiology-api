@@ -207,16 +207,17 @@ def invoke_bedrock_model(prompt: str) -> str:
     if not inference_profile_arn:
         raise ValueError("INFERENCE_PROFILE_ARN environment variable is not set.")
 
-    # Prepare the request body for Nova Pro
+    # Get inference config from environment
+    inference_config = json.loads(os.environ.get("INFERENCE_CONFIG", "{}"))
+    if not inference_config:
+        raise ValueError(
+            "INFERENCE_CONFIG environment variable is not set or is invalid JSON"
+        )
+
+    # Prepare the request body
     request_body = {
-        "messages": [{"role": "user", "content": [{"text": prompt}]}],
-        "inferenceConfig": {
-            "max_new_tokens": 4096,
-            "temperature": 0.0,
-            "top_k": 128,
-            "top_p": 0.9,
-            "stopSequences": ["\n\nHuman"],
-        },
+        "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        **inference_config,
     }
 
     try:
@@ -231,18 +232,18 @@ def invoke_bedrock_model(prompt: str) -> str:
         # Parse the response
         response_body = json.loads(response["body"].read())
 
-        # Extract the generated text from Nova Pro response format
-        if "output" in response_body and "message" in response_body["output"]:
-            content = response_body["output"]["message"]["content"]
-            if content and len(content) > 0 and "text" in content[0]:
-                return content[0]["text"]
+        # Extract the generated text from the response format
+        if "content" in response_body and isinstance(response_body["content"], list):
+            for item in response_body["content"]:
+                if item.get("type") == "text" and "text" in item:
+                    return item["text"]
 
-        # Fallback for different response formats
+        # Fallback for unexpected response formats
         logger.warning(f"Unexpected response format: {response_body}")
         return str(response_body)
 
     except Exception as e:
-        logger.error(f"Error invoking Bedrock model: {traceback.format_exc()}")
+        logger.error(f"Error while invoking model: {str(e)}")
         raise
 
 

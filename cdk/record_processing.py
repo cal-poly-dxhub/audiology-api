@@ -9,6 +9,8 @@ from aws_cdk import (
 )
 from constructs import Construct
 from aws_cdk import Duration
+from .config_utils import read_model_config
+import json
 
 
 class RecordProcessing(Construct):
@@ -29,24 +31,20 @@ class RecordProcessing(Construct):
         self.region = Stack.of(self).region
         self.account = Stack.of(self).account
 
-        regions = [
-            "us-east-1",
-            "us-east-2",
-            "us-west-1",
-            "us-west-2",
-        ]
+        # Read model configuration
+        model_config = read_model_config()
 
-        inference_profiles = [
-            f"arn:aws:bedrock:{region}:{self.account}:inference-profile/us.amazon.nova-pro-v1:0"
-            for region in regions
-        ]
+        print("Model configuration loaded successfully: ", model_config)
 
-        model_arns = [
-            f"arn:aws:bedrock:{region}::foundation-model/amazon.nova-pro-v1:0"
-            for region in regions
-        ]
+        inference_profile = model_config["model"]["inference_profile"]
+        model_id = model_config["model"]["model_id"]
+        model_regions = model_config["model"]["model_regions"]
 
-        main_inference_profile = f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/us.amazon.nova-pro-v1:0"
+        inference_profile_arn = f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/{inference_profile}"
+        foundation_model_arns = [
+            f"arn:aws:bedrock:{region}::foundation-model/{model_id}"
+            for region in model_regions
+        ]
 
         record_processor_lambda = _lambda.Function(
             self,
@@ -69,8 +67,9 @@ class RecordProcessing(Construct):
             environment={
                 "JOB_TABLE": job_table.table_name,
                 "CONFIG_TABLE": config_table.table_name,
-                "INFERENCE_PROFILE_ARN": main_inference_profile,
+                "INFERENCE_PROFILE_ARN": inference_profile_arn,
                 "BUCKET_NAME": bucket.bucket_name,
+                "INFERENCE_CONFIG": json.dumps(model_config["inference_config"]),
             },
             layers=[error_layer],
         )
@@ -81,7 +80,7 @@ class RecordProcessing(Construct):
         record_processor_lambda.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
-                resources=model_arns + inference_profiles,
+                resources=foundation_model_arns + [inference_profile_arn],
             )
         )
 
