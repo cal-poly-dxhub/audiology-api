@@ -76,6 +76,8 @@ Overall design flow:
 7. Processing completes, and the Completion Lambda is invoked
 8. User receives completion updates over WebSocket connection
 
+<img width="2137" height="1822" alt="Audiology API Architecture" src="https://github.com/user-attachments/assets/62893d04-edc9-464e-ad70-9359d4bef0b4" />
+
 
 ## API Testing Scripts
 
